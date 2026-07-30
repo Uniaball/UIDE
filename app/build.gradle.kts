@@ -26,6 +26,27 @@ android {
         }
     }
 
+    // ---- Release signing (CI only) ----
+    // Activates only when KEYSTORE_BASE64 is provided (set from a repo secret in
+    // .github/workflows/release.yml). Local/dev builds and the CI `build` job are
+    // unaffected because the env var is absent, so release stays unsigned locally.
+    val keystoreBase64 = System.getenv("KEYSTORE_BASE64")
+    if (!keystoreBase64.isNullOrBlank()) {
+        signingConfigs {
+            create("release") {
+                storeFile = file("$rootDir/keystore.jks")
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+        buildTypes {
+            release {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

@@ -62,6 +62,24 @@ UIDE/
 
 > **AGP 兼容提示**：若 `compileSdk = 36` 被当前 AGP 拒绝，请将根 `build.gradle.kts` 中 `com.android.application` 的版本号升到支持 Android 16（API 36）的最新 8.x。
 
+## 持续集成 / 发布
+
+仓库已内置两条 GitHub Actions 工作流（均使用最新版 Action）：
+
+- **`.github/workflows/ci.yml`** —— 推送 / PR 到 `main` 时自动 `./gradlew build`，并上传 debug APK 产物。无需任何密钥即可运行。
+- **`.github/workflows/release.yml`** —— 推送版本标签（如 `v1.0.0`）时，用仓库密钥签名并构建 **已签名的 APK + AAB**，上传产物并自动创建 GitHub Release。
+
+Release 流程依赖以下 **仓库 Secrets**（Settings → Secrets and variables → Actions）：
+
+| Secret | 说明 |
+| --- | --- |
+| `KEYSTORE_BASE64` | 签名密钥库 `keystore.jks` 的 base64 内容（`base64 -w0 keystore.jks`） |
+| `KEYSTORE_PASSWORD` | 密钥库密码 |
+| `KEY_ALIAS` | 密钥别名 |
+| `KEY_PASSWORD` | 密钥密码 |
+
+> 未配置这些密钥时，`ci.yml` 仍可正常构建；`release.yml` 仅在打 tag 时触发，且签名配置在 `app/build.gradle.kts` 中**仅在检测到 `KEYSTORE_BASE64` 时才启用**，因此本地 / CI 日常构建不受影响。
+
 ## 已知限制 / 后续计划
 
 - 编辑器叠层方案对光标与选择是初期近似实现；超宽长行滚动已对齐，但极端情况下可能存在像素级偏差，后续可迁移到 `TextFieldState` 做精细化。
