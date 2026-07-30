@@ -54,6 +54,8 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+        // Opt in to Material3 experimental APIs (e.g. TopAppBar) at module level.
+        freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
     }
 
     buildFeatures {
