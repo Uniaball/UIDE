@@ -1,0 +1,10 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Light base theme for the window. Compose's own UIDETheme provides the
+         Material 3 color scheme; this XML theme only sets "no action bar" and
+         lets enableEdgeToEdge() control the system bars. -->
+    <style name="Theme.UIDE" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>
