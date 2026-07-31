@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        repository = FileRepository.fromFilesDir(filesDir)
+        repository = FileRepository.fromContext(this)
 
         setContent {
             UIDETheme {

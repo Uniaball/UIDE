@@ -1,32 +1,17 @@
 package com.uniaball.uide.data
 
+import android.content.Context
 import java.io.File
 
 /**
- * CRUD over a dedicated subdirectory of the app's private internal storage.
- * All user files live in `filesDir/uide/` so that AndroidX libraries (e.g.
- * profileinstaller) writing their own markers into `filesDir/` can never
- * pollute the user-visible file list.
+ * CRUD on external storage (SD card).  Uses [Context.getExternalFilesDir],
+ * which lives on the shared / external storage partition and requires
+ * **zero** permissions on every Android version.
  */
 class FileRepository(private val root: File) {
 
     init {
         root.mkdirs()
-        migrateLegacyFiles()
-    }
-
-    /** Move user files that were created before the "uide/" subdirectory was
-     * introduced from `filesDir/` into `filesDir/uide/`. System files (e.g.
-     * profileinstalled or profileinstaller_*) are deliberately left behind. */
-    private fun migrateLegacyFiles() {
-        val parent = root.parentFile ?: return
-        parent.listFiles()?.forEach { old ->
-            if (!old.isFile) return@forEach
-            if (old.name == "profileinstalled") return@forEach
-            if (old.name.startsWith("profileinstaller")) return@forEach
-            if (old.name.startsWith(".")) return@forEach
-            old.renameTo(File(root, old.name))
-        }
     }
 
     fun listFiles(): List<File> =
@@ -72,7 +57,14 @@ class FileRepository(private val root: File) {
     }
 
     companion object {
-        fun fromFilesDir(filesDir: File): FileRepository =
-            FileRepository(File(filesDir, "uide"))
+        /**
+         * External storage (SD card), app-specific directory.
+         * Falls back to internal [Context.getFilesDir] if external storage is
+         * unmounted.  User files are placed in a `uide/` subdirectory.
+         */
+        fun fromContext(context: Context): FileRepository {
+            val base = context.getExternalFilesDir(null) ?: context.filesDir
+            return FileRepository(File(base, "uide"))
+        }
     }
 }
