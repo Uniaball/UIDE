@@ -34,6 +34,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.SavedStateHandle
 import com.uniaball.uide.data.FileRepository
 import com.uniaball.uide.syntax.CSyntaxHighlighter
 import com.uniaball.uide.ui.theme.EditorFontFamily
@@ -44,6 +45,7 @@ import kotlinx.coroutines.launch
 fun EditorScreen(
     fileName: String,
     repository: FileRepository,
+    fileListHandle: SavedStateHandle? = null,
     onBack: () -> Unit,
 ) {
     val dark = isSystemInDarkTheme()
@@ -85,6 +87,9 @@ fun EditorScreen(
                     IconButton(onClick = {
                         if (repository.write(fileName, text.text)) {
                             scope.launch { snackbarHost.showSnackbar("已保存") }
+                            // Tell the file list to re-read when we return.
+                            val key = "uide_refresh"
+                            fileListHandle?.set(key, (fileListHandle.get<Int>(key) ?: 0) + 1)
                         }
                     }) {
                         Icon(Icons.Filled.Save, contentDescription = "保存")

@@ -10,9 +10,23 @@ import java.io.File
  */
 class FileRepository(private val root: File) {
 
+    init {
+        // Make sure the storage directory exists before any read/write.
+        root.mkdirs()
+    }
+
+    /**
+     * Files written by the system into our private directory (not user content).
+     * The AndroidX profile-installer drops `profileinstalled` here on first run,
+     * which must never show up as a user-editable file.
+     */
+    private val systemFiles: Set<String> = setOf("profileinstalled")
+
     fun listFiles(): List<File> =
         (root.listFiles() ?: emptyArray())
             .filter { it.isFile }
+            .filter { !it.name.startsWith(".") }
+            .filter { it.name !in systemFiles && !it.name.startsWith("profileinstaller") }
             .sortedByDescending { it.lastModified() }
 
     fun exists(name: String): Boolean {

@@ -46,9 +46,10 @@ class MainActivity : ComponentActivity() {
 private fun AppNav(repository: FileRepository) {
     val nav = rememberNavController()
     NavHost(navController = nav, startDestination = "files") {
-        composable("files") {
+        composable("files") { backStack ->
             FileListScreen(
                 repository = repository,
+                savedStateHandle = backStack.savedStateHandle,
                 onOpenFile = { name -> nav.navigate("editor/${URLEncoder.encode(name, "UTF-8")}") },
             )
         }
@@ -61,6 +62,7 @@ private fun AppNav(repository: FileRepository) {
             EditorScreen(
                 fileName = name,
                 repository = repository,
+                fileListHandle = nav.previousBackStackEntry?.savedStateHandle,
                 onBack = { nav.popBackStack() },
             )
         }

@@ -23,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.SavedStateHandle
 import com.uniaball.uide.data.FileRepository
 import java.io.File
 import java.text.SimpleDateFormat
@@ -39,15 +42,24 @@ import java.util.Locale
 @Composable
 fun FileListScreen(
     repository: FileRepository,
+    savedStateHandle: SavedStateHandle,
     onOpenFile: (String) -> Unit,
 ) {
     var files by remember { mutableStateOf(repository.listFiles()) }
+    // The editor bumps this counter after a save so the list re-reads on return
+    // (the screen is kept alive on the NavHost back stack, so its `remember`
+    // value would otherwise stay stale).
+    val refreshSignal by savedStateHandle.getStateFlow("uide_refresh", 0).collectAsState()
     var showNewDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("untitled.c") }
     var deleteTarget by remember { mutableStateOf<String?>(null) }
 
     fun refresh() {
         files = repository.listFiles()
+    }
+
+    LaunchedEffect(refreshSignal) {
+        refresh()
     }
 
     Scaffold(
