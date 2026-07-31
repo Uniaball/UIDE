@@ -1,19 +1,24 @@
 package com.uniaball.uide.syntax
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import com.uniaball.uide.ui.theme.SyntaxColors
 
 /**
- * Minimal C syntax highlighter.
+ * Lightweight C / C++ syntax highlighter.
  *
  * Implementation: a single forward scan with a small state machine so that
  * tokens inside comments / strings are NOT mistaken for keywords, etc.
- * Good enough for an initial editor; not a full C parser.
+ * Not a full parser — good enough for an initial code editor.
+ *
+ * C++ is syntactically a superset of C, so the scanning logic is identical
+ * for both; only the recognised keyword / type sets differ (see [isCpp]).
  */
 object CSyntaxHighlighter {
 
-    private val KEYWORDS = setOf(
+    // ---- C keywords ----
+    private val C_KEYWORDS = setOf(
         "auto", "break", "case", "char", "const", "continue", "default", "do",
         "double", "else", "enum", "extern", "float", "for", "goto", "if",
         "inline", "int", "long", "register", "restrict", "return", "short",
@@ -22,14 +27,78 @@ object CSyntaxHighlighter {
         "_Bool", "_Complex", "_Imaginary",
     )
 
-    private val TYPES = setOf(
+    // ---- C++ keywords (includes the C set above) ----
+    private val CPP_KEYWORDS = setOf(
+        // C keywords
+        "auto", "break", "case", "char", "const", "continue", "default", "do",
+        "double", "else", "enum", "extern", "float", "for", "goto", "if",
+        "inline", "int", "long", "register", "restrict", "return", "short",
+        "signed", "sizeof", "static", "struct", "switch", "typedef", "union",
+        "unsigned", "void", "volatile", "while",
+        "_Bool", "_Complex", "_Imaginary",
+        // C++ additions
+        "alignas", "alignof", "asm", "bool", "catch", "class", "compl",
+        "concept", "const_cast", "consteval", "constexpr", "constinit",
+        "decltype", "delete", "dynamic_cast", "explicit", "export", "false",
+        "friend", "mutable", "namespace", "new", "noexcept", "nullptr",
+        "operator", "private", "protected", "public", "reinterpret_cast",
+        "requires", "static_assert", "static_cast", "template", "this",
+        "thread_local", "throw", "true", "try", "typeid", "typename", "using",
+        "virtual", "wchar_t", "co_await", "co_return", "co_yield", "char8_t",
+        "char16_t", "char32_t",
+        // alternative tokens
+        "and", "and_eq", "bitand", "bitor", "not", "not_eq", "or", "or_eq",
+        "xor", "xor_eq",
+    )
+
+    // ---- C built-in / common types ----
+    private val C_TYPES = setOf(
         "int", "char", "float", "double", "void", "long", "short",
         "unsigned", "signed", "bool", "size_t",
         "int8_t", "int16_t", "int32_t", "int64_t",
         "uint8_t", "uint16_t", "uint32_t", "uint64_t", "wchar_t",
     )
 
-    fun highlight(text: String, colors: SyntaxColors): AnnotatedString {
+    // ---- C++ additional types (std + built-ins) ----
+    private val CPP_TYPES = setOf(
+        "int", "char", "float", "double", "void", "long", "short",
+        "unsigned", "signed", "bool", "size_t", "wchar_t",
+        "int8_t", "int16_t", "int32_t", "int64_t",
+        "uint8_t", "uint16_t", "uint32_t", "uint64_t",
+        "char8_t", "char16_t", "char32_t", "nullptr_t",
+        "string", "string_view", "vector", "map", "set", "list", "array",
+        "pair", "tuple", "queue", "stack", "deque", "bitset",
+        "unordered_map", "unordered_set", "initializer_list",
+        "shared_ptr", "unique_ptr", "weak_ptr",
+        "iostream", "ostream", "istream", "stringstream", "ofstream",
+        "ifstream", "complex", "valarray", "atomic",
+    )
+
+    /**
+     * Highlight [text]. Pass [isCpp] = true for C++ sources (.cpp/.hpp/...)
+     * so the C++ keyword / type vocabulary is used; otherwise C is assumed.
+     */
+    fun highlight(text: String, colors: SyntaxColors, isCpp: Boolean = false): AnnotatedString {
+        val keywords = if (isCpp) CPP_KEYWORDS else C_KEYWORDS
+        val types = if (isCpp) CPP_TYPES else C_TYPES
+        return scan(text, colors, keywords, types)
+    }
+
+    /** True for file names that should be highlighted as C++. */
+    fun isCppFile(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.endsWith(".cpp") || lower.endsWith(".cc") ||
+            lower.endsWith(".cxx") || lower.endsWith(".c++") ||
+            lower.endsWith(".hpp") || lower.endsWith(".hxx") ||
+            lower.endsWith(".hh") || lower.endsWith(".h++")
+    }
+
+    private fun scan(
+        text: String,
+        colors: SyntaxColors,
+        keywords: Set<String>,
+        types: Set<String>,
+    ): AnnotatedString {
         val builder = AnnotatedString.Builder(text.length)
         builder.append(text)
         var i = 0
@@ -115,8 +184,8 @@ object CSyntaxHighlighter {
                     while (j < n && (text[j] == ' ' || text[j] == '\t')) j++
                     val isFunc = j < n && text[j] == '('
                     val color = when {
-                        word in KEYWORDS -> colors.keyword
-                        word in TYPES -> colors.type
+                        word in keywords -> colors.keyword
+                        word in types -> colors.type
                         isFunc -> colors.function
                         else -> null
                     }
@@ -130,7 +199,12 @@ object CSyntaxHighlighter {
         return builder.toAnnotatedString()
     }
 
-    private fun style(builder: AnnotatedString.Builder, start: Int, end: Int, color: androidx.compose.ui.graphics.Color) {
+    private fun style(
+        builder: AnnotatedString.Builder,
+        start: Int,
+        end: Int,
+        color: Color,
+    ) {
         if (end > start) builder.addStyle(SpanStyle(color = color), start, end)
     }
 }

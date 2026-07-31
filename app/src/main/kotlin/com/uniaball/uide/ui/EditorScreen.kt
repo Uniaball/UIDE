@@ -54,8 +54,9 @@ fun EditorScreen(
     val scope = rememberCoroutineScope()
 
     var text by remember(fileName) { mutableStateOf(TextFieldValue(repository.read(fileName))) }
-    val highlighted = remember(text.text) {
-        CSyntaxHighlighter.highlight(text.text, colors)
+    val isCpp = remember(fileName) { CSyntaxHighlighter.isCppFile(fileName) }
+    val highlighted = remember(text.text, isCpp) {
+        CSyntaxHighlighter.highlight(text.text, colors, isCpp)
     }
 
     val editorStyle = remember {
