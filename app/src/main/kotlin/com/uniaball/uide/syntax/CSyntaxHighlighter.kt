@@ -74,6 +74,11 @@ object CSyntaxHighlighter {
         "ifstream", "complex", "valarray", "atomic",
     )
 
+    // ---- boolean / null literals (distinct color from keywords) ----
+    private val BOOLEANS = setOf(
+        "true", "false", "TRUE", "FALSE", "NULL", "nullptr",
+    )
+
     /**
      * Highlight [text]. Pass [isCpp] = true for C++ sources (.cpp/.hpp/...)
      * so the C++ keyword / type vocabulary is used; otherwise C is assumed.
@@ -102,6 +107,7 @@ object CSyntaxHighlighter {
         val builder = AnnotatedString.Builder(text.length)
         builder.append(text)
         var i = 0
+        var pendingMember = false
         val n = text.length
 
         while (i < n) {
@@ -184,9 +190,10 @@ object CSyntaxHighlighter {
                 }
 
                 // operators that are characteristic of C++ (and common in C)
-                // scope resolution  ::
+                // scope resolution  ::   (ns::name — name is a member)
                 c == ':' && i + 1 < n && text[i + 1] == ':' -> {
                     style(builder, i, i + 2, colors.operator)
+                    pendingMember = true
                     i += 2
                 }
                 // member access  ->   (and the rare ->*)
@@ -195,6 +202,7 @@ object CSyntaxHighlighter {
                     i += 2
                     if (i < n && text[i] == '*') i++   // ->*
                     style(builder, start, i, colors.operator)
+                    pendingMember = true
                 }
                 // shift / stream  <<
                 c == '<' && i + 1 < n && text[i + 1] == '<' -> {
@@ -205,6 +213,14 @@ object CSyntaxHighlighter {
                 c == '>' && i + 1 < n && text[i + 1] == '>' -> {
                     style(builder, i, i + 2, colors.operator)
                     i += 2
+                }
+
+                // member access  .   (obj.field) — mark the following identifier
+                c == '.' -> {
+                    if (i + 1 < n && (text[i + 1].isLetter() || text[i + 1] == '_')) {
+                        pendingMember = true
+                    }
+                    i++
                 }
 
                 // number literal
@@ -230,10 +246,18 @@ object CSyntaxHighlighter {
                     var j = i
                     while (j < n && (text[j] == ' ' || text[j] == '\t')) j++
                     val isFunc = j < n && text[j] == '('
+                    val isMember = pendingMember
+                    pendingMember = false
+                    // Priority: boolean literal > keyword > type > function call >
+                    // member access > ALL_CAPS constant (macros). Plain identifiers
+                    // (local variables, parameters) stay uncolored on purpose.
                     val color = when {
+                        word in BOOLEANS -> colors.boolean
                         word in keywords -> colors.keyword
                         word in types -> colors.type
                         isFunc -> colors.function
+                        isMember -> colors.member
+                        word.isAllCaps() -> colors.constant
                         else -> null
                     }
                     if (color != null) style(builder, start, i, color)
@@ -253,5 +277,19 @@ object CSyntaxHighlighter {
         color: Color,
     ) {
         if (end > start) builder.addStyle(SpanStyle(color = color), start, end)
+    }
+
+    /** True for macro-like identifiers: ALL_CAPS with at least one letter. */
+    private fun String.isAllCaps(): Boolean {
+        if (length < 2) return false
+        var hasUpper = false
+        for (ch in this) {
+            when {
+                ch.isUpperCase() -> hasUpper = true
+                ch.isLowerCase() -> return false   // mixed/lower → not a macro
+                // digits and '_' are allowed
+            }
+        }
+        return hasUpper
     }
 }
