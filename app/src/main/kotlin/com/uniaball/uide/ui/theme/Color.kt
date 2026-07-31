@@ -3,7 +3,7 @@ package com.uniaball.uide.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Color roles for C syntax highlighting.
+ * Color roles for C / C++ syntax highlighting.
  * Tuned to be readable on both light and dark surfaces (VS Code-like).
  */
 data class SyntaxColors(
@@ -14,6 +14,7 @@ data class SyntaxColors(
     val keyword: Color,
     val type: Color,
     val function: Color,
+    val operator: Color,
 )
 
 fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
@@ -25,6 +26,7 @@ fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
         keyword = Color(0xFF569CD6),
         type = Color(0xFF4EC9B0),
         function = Color(0xFFDCDCAA),
+        operator = Color(0xFFD4D4D4),
     )
 } else {
     SyntaxColors(
@@ -35,5 +37,6 @@ fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
         keyword = Color(0xFF0000FF),
         type = Color(0xFF267F99),
         function = Color(0xFF795E26),
+        operator = Color(0xFF5A5A5A),
     )
 }

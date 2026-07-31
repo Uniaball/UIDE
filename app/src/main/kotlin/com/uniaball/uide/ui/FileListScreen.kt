@@ -93,7 +93,7 @@ fun FileListScreen(
                     value = newName,
                     onValueChange = { newName = it },
                     singleLine = true,
-                    label = { Text("文件名 (.c / .h)") },
+                    label = { Text("文件名 (.c / .h / .cpp / .hpp …)") },
                 )
             },
             confirmButton = {

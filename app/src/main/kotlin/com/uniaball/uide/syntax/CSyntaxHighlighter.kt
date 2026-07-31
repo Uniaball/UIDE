@@ -123,14 +123,37 @@ object CSyntaxHighlighter {
                     style(builder, start, i, colors.comment)
                 }
 
-                // string literal  "..."
-                c == '"' -> {
+                // string literal: plain "...", encoding-prefixed (L/u8/u/U), or raw R"(...)"
+                c == '"' ||
+                (c == 'R' && i + 1 < n && text[i + 1] == '"') ||
+                ((c == 'L' || c == 'u' || c == 'U') && i + 1 < n && text[i + 1] == '"') ||
+                (c == 'u' && i + 2 < n && text[i + 1] == '8' && text[i + 2] == '"') -> {
                     val start = i
-                    i++
-                    while (i < n) {
-                        if (text[i] == '\\' && i + 1 < n) { i += 2; continue }
-                        if (text[i] == '"') { i++; break }
+                    // consume the optional prefix so the body scan starts at the quote
+                    if (c != '"') {
+                        if (c == 'R') {
+                            i += 2                 // R"(...)
+                        } else if (c == 'u' && i + 2 < n && text[i + 1] == '8') {
+                            i += 3                 // u8"(...)
+                        } else {
+                            i += 2                 // L"(...) / u"(...) / U"(...)
+                        }
+                    } else {
+                        i += 1                     // plain "..."
+                    }
+                    if (c == 'R' && i < n && text[i] == '(') {
+                        // raw string: read until the closing )"
                         i++
+                        while (i < n) {
+                            if (text[i] == ')' && i + 1 < n && text[i + 1] == '"') { i += 2; break }
+                            i++
+                        }
+                    } else {
+                        while (i < n) {
+                            if (text[i] == '\\' && i + 1 < n) { i += 2; continue }
+                            if (text[i] == '"') { i++; break }
+                            i++
+                        }
                     }
                     style(builder, start, i, colors.string)
                 }
@@ -158,6 +181,30 @@ object CSyntaxHighlighter {
                     } else {
                         i++
                     }
+                }
+
+                // operators that are characteristic of C++ (and common in C)
+                // scope resolution  ::
+                c == ':' && i + 1 < n && text[i + 1] == ':' -> {
+                    style(builder, i, i + 2, colors.operator)
+                    i += 2
+                }
+                // member access  ->   (and the rare ->*)
+                c == '-' && i + 1 < n && text[i + 1] == '>' -> {
+                    val start = i
+                    i += 2
+                    if (i < n && text[i] == '*') i++   // ->*
+                    style(builder, start, i, colors.operator)
+                }
+                // shift / stream  <<
+                c == '<' && i + 1 < n && text[i + 1] == '<' -> {
+                    style(builder, i, i + 2, colors.operator)
+                    i += 2
+                }
+                // shift / closing template  >>
+                c == '>' && i + 1 < n && text[i + 1] == '>' -> {
+                    style(builder, i, i + 2, colors.operator)
+                    i += 2
                 }
 
                 // number literal
