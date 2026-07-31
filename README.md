@@ -45,7 +45,9 @@
 
 ## 文件存储位置
 
-文件保存在应用私有目录（`getFilesDir()`，即设备上的 `android/data/com.uniaball.uide/files/`）。该目录为沙箱私有目录：应用内可见、可编辑。
+用户文件保存在应用私有目录下的 `uide/` 子目录中（即 `android/data/com.uniaball.uide/files/uide/`）。该目录与 AndroidX 系统库写入的内部文件（如 `profileinstalled`）天然隔离，因此应用列表里不会出现系统文件。
+
+> **Android 11 起**，系统会拦截电脑 USB / 第三方文件管理器对 `android/data/<包名>/` 的访问——电脑端看不到该文件夹属于正常现象，并非文件丢失。
 
 ## 开源协议
 

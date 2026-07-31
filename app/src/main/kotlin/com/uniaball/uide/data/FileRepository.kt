@@ -3,30 +3,35 @@ package com.uniaball.uide.data
 import java.io.File
 
 /**
- * CRUD over the app's private internal storage directory (Context.getFilesDir()).
- * No external-storage permission is required, and files are removed with the app.
- *
- * All names are sanitized so a caller cannot escape the directory (no "/" or "..").
+ * CRUD over a dedicated subdirectory of the app's private internal storage.
+ * All user files live in `filesDir/uide/` so that AndroidX libraries (e.g.
+ * profileinstaller) writing their own markers into `filesDir/` can never
+ * pollute the user-visible file list.
  */
 class FileRepository(private val root: File) {
 
     init {
-        // Make sure the storage directory exists before any read/write.
         root.mkdirs()
+        migrateLegacyFiles()
     }
 
-    /**
-     * Files written by the system into our private directory (not user content).
-     * The AndroidX profile-installer drops `profileinstalled` here on first run,
-     * which must never show up as a user-editable file.
-     */
-    private val systemFiles: Set<String> = setOf("profileinstalled")
+    /** Move user files that were created before the "uide/" subdirectory was
+     * introduced from `filesDir/` into `filesDir/uide/`. System files (e.g.
+     * profileinstalled or profileinstaller_*) are deliberately left behind. */
+    private fun migrateLegacyFiles() {
+        val parent = root.parentFile ?: return
+        parent.listFiles()?.forEach { old ->
+            if (!old.isFile) return@forEach
+            if (old.name == "profileinstalled") return@forEach
+            if (old.name.startsWith("profileinstaller")) return@forEach
+            if (old.name.startsWith(".")) return@forEach
+            old.renameTo(File(root, old.name))
+        }
+    }
 
     fun listFiles(): List<File> =
         (root.listFiles() ?: emptyArray())
             .filter { it.isFile }
-            .filter { !it.name.startsWith(".") }
-            .filter { it.name !in systemFiles && !it.name.startsWith("profileinstaller") }
             .sortedByDescending { it.lastModified() }
 
     fun exists(name: String): Boolean {
@@ -67,6 +72,7 @@ class FileRepository(private val root: File) {
     }
 
     companion object {
-        fun fromFilesDir(filesDir: File): FileRepository = FileRepository(filesDir)
+        fun fromFilesDir(filesDir: File): FileRepository =
+            FileRepository(File(filesDir, "uide"))
     }
 }
