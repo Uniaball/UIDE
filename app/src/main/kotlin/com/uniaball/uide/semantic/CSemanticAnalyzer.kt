@@ -268,9 +268,9 @@ object CSemanticAnalyzer {
                 var lastIdent = ""
                 while (pos < n && text[pos] != ';') {
                     if (text[pos].isLetter() || text[pos] == '_') {
-                        val s = pos
+                        val start = pos
                         pos = s.endOfCIdentifier(text, pos, n)
-                        lastIdent = text.substring(s, pos)
+                        lastIdent = text.substring(start, pos)
                     } else {
                         pos++
                     }
