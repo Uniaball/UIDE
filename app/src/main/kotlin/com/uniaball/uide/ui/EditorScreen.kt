@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,6 +79,7 @@ fun EditorScreen(
     }
     val vScroll = rememberScrollState()
     val hScroll = rememberScrollState()
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     val layerModifier = Modifier
         .fillMaxSize()
@@ -123,28 +125,28 @@ fun EditorScreen(
                 style = editorStyle,
                 softWrap = false,
                 overflow = TextOverflow.Visible,
+                onTextLayout = { textLayoutResult = it },
                 modifier = layerModifier.drawWithContent {
                     drawContent()
-                    // Draw red wavy underlines for syntax errors (stored as
-                    // string annotations with tag "uide_error").
+                    val layout = textLayoutResult ?: return@drawWithContent
                     val errs = highlighted.getStringAnnotations("uide_error", 0, highlighted.length)
                     if (errs.isNotEmpty()) {
                         val waveColor = colors.error
                         for (err in errs) {
-                            val startLine = layoutResult.getLineForOffset(err.start)
-                            val endLine = layoutResult.getLineForOffset(
+                            val startLine = layout.getLineForOffset(err.start)
+                            val endLine = layout.getLineForOffset(
                                 (err.end - 1).coerceAtLeast(err.start)
                             )
                             for (line in startLine..endLine) {
                                 val left = if (line == startLine)
-                                    layoutResult.getHorizontalPosition(err.start, true)
+                                    layout.getHorizontalPosition(err.start, true)
                                 else
-                                    layoutResult.getLineLeft(line)
+                                    layout.getLineLeft(line)
                                 val right = if (line == endLine)
-                                    layoutResult.getHorizontalPosition(err.end, true)
+                                    layout.getHorizontalPosition(err.end, true)
                                 else
-                                    layoutResult.getLineRight(line)
-                                val bottom = layoutResult.getLineBottom(line)
+                                    layout.getLineRight(line)
+                                val bottom = layout.getLineBottom(line)
                                 drawWavyLine(left, right, bottom, waveColor)
                             }
                         }
