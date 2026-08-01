@@ -4,6 +4,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import com.uniaball.uide.semantic.CSemanticAnalyzer
 import com.uniaball.uide.semantic.LanguageMode
+import com.uniaball.uide.semantic.SemanticError
 import com.uniaball.uide.semantic.TextScanner
 import com.uniaball.uide.ui.theme.SyntaxColors
 
@@ -57,9 +58,9 @@ object CSyntaxHighlighter {
     ): AnnotatedString {
         val keywords = V.keywords(mode)
         val types = V.types(mode)
-        val declared = CSemanticAnalyzer.analyze(text, mode).allDeclared
-        val tokens = tokenize(text, keywords, types, declared)
-        return paint(text, tokens, colors, match)
+        val semantic = CSemanticAnalyzer.analyze(text, mode)
+        val tokens = tokenize(text, keywords, types, semantic.allDeclared)
+        return paint(text, tokens, colors, match, semantic.errors)
     }
 
     /** True for file names that should be highlighted as C++. */
@@ -231,6 +232,7 @@ object CSyntaxHighlighter {
         tokens: List<Token>,
         colors: SyntaxColors,
         match: String,
+        errors: List<SemanticError> = emptyList(),
     ): AnnotatedString {
         val builder = AnnotatedString.Builder(text.length)
         builder.append(text)
@@ -267,6 +269,15 @@ object CSyntaxHighlighter {
                     end,
                 )
                 idx = text.indexOf(match, end, ignoreCase = false)
+            }
+        }
+
+        // syntax-error spans — marked with string annotations for the
+        // drawWithContent wavy-underline pass in EditorScreen.
+        for (err in errors) {
+            val end = err.end.coerceAtMost(text.length)
+            if (end > err.start) {
+                builder.addStringAnnotation("uide_error", err.message, err.start, end)
             }
         }
 

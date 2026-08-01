@@ -38,6 +38,8 @@ data class SyntaxColors(
     // ---- search match ----
     val searchMatchBg: Color,  // background for search-term highlight
     val searchMatchFg: Color,  // foreground (text) color on search-match background
+    // ---- diagnostic ----
+    val error: Color,          // syntax-error squiggly underline / text
 )
 
 fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
@@ -60,6 +62,8 @@ fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
         // search match
         searchMatchBg = Color(0x44FFF59D),    // translucent yellow, readable on dark surfaces
         searchMatchFg = Color(0xFF1E1E1E),    // near-black, readable on yellow bg
+        // diagnostic
+        error = Color(0xFFF44747),             // red squiggly (VS Code errorForeground)
     )
 } else {
     // VS Code "Light+" (light_vs.json + light_plus.json)
@@ -81,5 +85,7 @@ fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
         // search match
         searchMatchBg = Color(0x44FFEB3B),    // translucent yellow, readable on light surfaces
         searchMatchFg = Color(0xFF000000),    // black, readable on yellow bg
+        // diagnostic
+        error = Color(0xFFE51400),             // red squiggly (VS Code errorForeground light)
     )
 }

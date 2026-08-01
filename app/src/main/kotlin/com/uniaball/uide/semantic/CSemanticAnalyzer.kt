@@ -146,9 +146,13 @@ object CSemanticAnalyzer {
     fun analyze(text: String, mode: LanguageMode): SemanticInfo {
         val variables = mutableSetOf<String>()
         val typedefs = mutableSetOf<String>()
+        val errors = mutableListOf<SemanticError>()
         var i = 0; val n = text.length
         var afterType = false
         var inDecl = false
+        var braceDepth = 0
+        var parenDepth = 0
+        var bracketDepth = 0
         val structKeys = when (mode) {
             LanguageMode.C -> STRUCT_C
             LanguageMode.CPP -> STRUCT_CPP
@@ -163,20 +167,43 @@ object CSemanticAnalyzer {
                 // ---- comments ----
                 c == '/' && i + 1 < n && text[i + 1] == '/' ->
                     i = s.skipLineComment(text, i, n)
-                c == '/' && i + 1 < n && text[i + 1] == '*' ->
+                c == '/' && i + 1 < n && text[i + 1] == '*' -> {
+                    val start = i
                     i = s.skipBlockComment(text, i, n)
+                    if (i >= n) errors += SemanticError(start, n, "未闭合的块注释")
+                }
 
                 // ---- strings / chars ----
-                c == '"' || c == '\'' ->
+                c == '"' || c == '\'' -> {
+                    val start = i
                     i = s.skipStringLiteral(text, i, n, c)
+                    if (i >= n && c == '"') errors += SemanticError(start, n, "未闭合的字符串")
+                }
 
                 // ---- preprocessor ----
                 c == '#' ->
                     i = s.skipPreprocessor(text, i, n)
 
-                // ---- terminators (full reset) ----
-                c == ';' || c == '{' || c == '}' || c == '(' || c == ')' ||
-                c == '[' || c == ':' -> {
+                // ---- braces / brackets / parens (mismatch tracking) ----
+                c == '(' -> { parenDepth++; afterType = false; inDecl = false; i++ }
+                c == ')' -> {
+                    parenDepth--
+                    if (parenDepth < 0) { errors += SemanticError(i, i + 1, "多余的 ')'"); parenDepth = 0 }
+                    afterType = false; inDecl = false; i++
+                }
+                c == '[' -> { bracketDepth++; afterType = false; inDecl = false; i++ }
+                c == ']' -> {
+                    bracketDepth--
+                    if (bracketDepth < 0) { errors += SemanticError(i, i + 1, "多余的 ']'"); bracketDepth = 0 }
+                    afterType = false; inDecl = false; i++
+                }
+                c == '{' -> { braceDepth++; afterType = false; inDecl = false; i++ }
+                c == '}' -> {
+                    braceDepth--
+                    if (braceDepth < 0) { errors += SemanticError(i, i + 1, "多余的 '}'"); braceDepth = 0 }
+                    afterType = false; inDecl = false; i++
+                }
+                c == ';' || c == ':' -> {
                     afterType = false; inDecl = false; i++
                 }
 
@@ -228,9 +255,13 @@ object CSemanticAnalyzer {
                 else -> i++
             }
         }
+        if (parenDepth > 0) errors += SemanticError(n, n, "$parenDepth 个未闭合的 '('")
+        if (bracketDepth > 0) errors += SemanticError(n, n, "$bracketDepth 个未闭合的 '['")
+        if (braceDepth > 0) errors += SemanticError(n, n, "$braceDepth 个未闭合的 '{'")
         return SemanticInfo(
             declaredVariables = variables,
             typedefAliases = typedefs,
+            errors = errors,
         )
     }
 
