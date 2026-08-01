@@ -8,8 +8,9 @@ import androidx.compose.ui.graphics.Color
  *
  * The base 8 roles (comment/string/preprocessor/number/keyword/type/function/
  * operator) keep a stable color consensus. The extra 3 roles (constant/member/
- * boolean) only add more distinct colors for *different kinds of words*; they
- * never change the established base palette.
+ * boolean) only add more distinct colors for *different kinds of words*;
+ * they never change the established base palette. Plain identifiers reuse the
+ * function color.
  */
 data class SyntaxColors(
     val comment: Color,

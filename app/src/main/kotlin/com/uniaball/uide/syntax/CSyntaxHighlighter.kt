@@ -249,8 +249,8 @@ object CSyntaxHighlighter {
                     val isMember = pendingMember
                     pendingMember = false
                     // Priority: boolean literal > keyword > type > function call >
-                    // member access > ALL_CAPS constant (macros). Plain identifiers
-                    // (local variables, parameters) stay uncolored on purpose.
+                    // member access > ALL_CAPS constant (macros) > plain identifier
+                    // (plain identifiers reuse the function color).
                     val color = when {
                         word in BOOLEANS -> colors.boolean
                         word in keywords -> colors.keyword
@@ -258,7 +258,7 @@ object CSyntaxHighlighter {
                         isFunc -> colors.function
                         isMember -> colors.member
                         word.isAllCaps() -> colors.constant
-                        else -> null
+                        else -> colors.function
                     }
                     if (color != null) style(builder, start, i, color)
                 }
