@@ -1,6 +1,7 @@
 package com.uniaball.uide.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -70,16 +71,31 @@ fun FileListScreen(
             }
         },
     ) { padding ->
-        LazyColumn(
-            contentPadding = padding,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(items = files, key = { it.name }) { file ->
-                FileRow(
-                    file = file,
-                    onClick = { onOpenFile(file.name) },
-                    onDelete = { deleteTarget = file.name },
+        if (files.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "暂无文件\n点击 + 创建新文件",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        } else {
+            LazyColumn(
+                contentPadding = padding,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(items = files, key = { it.name }) { file ->
+                    FileRow(
+                        file = file,
+                        onClick = { onOpenFile(file.name) },
+                        onDelete = { deleteTarget = file.name },
+                    )
+                }
             }
         }
     }
@@ -111,8 +127,7 @@ fun FileListScreen(
         )
     }
 
-    if (deleteTarget != null) {
-        val name = deleteTarget!!
+    deleteTarget?.let { name ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text("删除文件") },
@@ -147,7 +162,7 @@ private fun FileRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(file.name, style = MaterialTheme.typography.bodyLarge)
             Text(
-                text = "${file.length()} B · ${formatTime(file.lastModified())}",
+                text = "${formatSize(file.length())} · ${formatTime(file.lastModified())}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -157,6 +172,12 @@ private fun FileRow(
         }
     }
     HorizontalDivider()
+}
+
+private fun formatSize(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
+    else -> "%.1f MB".format(bytes / (1024.0 * 1024))
 }
 
 private fun formatTime(time: Long): String {

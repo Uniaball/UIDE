@@ -1,12 +1,18 @@
 package com.uniaball.uide.syntax
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import com.uniaball.uide.semantic.CSemanticAnalyzer
+import com.uniaball.uide.semantic.LanguageMode
+import com.uniaball.uide.semantic.TextScanner
 import com.uniaball.uide.ui.theme.SyntaxColors
 
 /**
  * C / C++ syntax highlighter.
+ *
+ * Depends on [CSemanticAnalyzer] (in `com.uniaball.uide.semantic`) for
+ * declaration-level information; the analyzer is the **authority** — this
+ * highlighter consumes its output.
  *
  * Architecture ported from AndroidIDE's `Highlighter` design (see
  * AndroidCSOfficial/android-code-studio): a single forward scan **tokenizes**
@@ -31,100 +37,39 @@ object CSyntaxHighlighter {
         TEXT_NORMAL,
     }
 
-    // ---- C keywords ----
-    private val C_KEYWORDS = setOf(
-        "auto", "break", "case", "char", "const", "continue", "default", "do",
-        "double", "else", "enum", "extern", "float", "for", "goto", "if",
-        "inline", "int", "long", "register", "restrict", "return", "short",
-        "signed", "sizeof", "static", "struct", "switch", "typedef", "union",
-        "unsigned", "void", "volatile", "while",
-        "_Bool", "_Complex", "_Imaginary",
-    )
-
-    // ---- C++ keywords (includes the C set above) ----
-    private val CPP_KEYWORDS = setOf(
-        // C keywords
-        "auto", "break", "case", "char", "const", "continue", "default", "do",
-        "double", "else", "enum", "extern", "float", "for", "goto", "if",
-        "inline", "int", "long", "register", "restrict", "return", "short",
-        "signed", "sizeof", "static", "struct", "switch", "typedef", "union",
-        "unsigned", "void", "volatile", "while",
-        "_Bool", "_Complex", "_Imaginary",
-        // C++ additions
-        "alignas", "alignof", "asm", "bool", "catch", "class", "compl",
-        "concept", "const_cast", "consteval", "constexpr", "constinit",
-        "decltype", "delete", "dynamic_cast", "explicit", "export", "false",
-        "friend", "mutable", "namespace", "new", "noexcept", "nullptr",
-        "operator", "private", "protected", "public", "reinterpret_cast",
-        "requires", "static_assert", "static_cast", "template", "this",
-        "thread_local", "throw", "true", "try", "typeid", "typename", "using",
-        "virtual", "wchar_t", "co_await", "co_return", "co_yield", "char8_t",
-        "char16_t", "char32_t",
-        // alternative tokens
-        "and", "and_eq", "bitand", "bitor", "not", "not_eq", "or", "or_eq",
-        "xor", "xor_eq",
-    )
-
-    // ---- C built-in / common types ----
-    private val C_TYPES = setOf(
-        "int", "char", "float", "double", "void", "long", "short",
-        "unsigned", "signed", "bool", "size_t",
-        "int8_t", "int16_t", "int32_t", "int64_t",
-        "uint8_t", "uint16_t", "uint32_t", "uint64_t", "wchar_t",
-    )
-
-    // ---- C++ additional types (std + built-ins) ----
-    private val CPP_TYPES = setOf(
-        "int", "char", "float", "double", "void", "long", "short",
-        "unsigned", "signed", "bool", "size_t", "wchar_t",
-        "int8_t", "int16_t", "int32_t", "int64_t",
-        "uint8_t", "uint16_t", "uint32_t", "uint64_t",
-        "char8_t", "char16_t", "char32_t", "nullptr_t",
-        "string", "string_view", "vector", "map", "set", "list", "array",
-        "pair", "tuple", "queue", "stack", "deque", "bitset",
-        "unordered_map", "unordered_set", "initializer_list",
-        "shared_ptr", "unique_ptr", "weak_ptr",
-        "iostream", "ostream", "istream", "stringstream", "ofstream",
-        "ifstream", "complex", "valarray", "atomic",
-    )
-
-    // ---- boolean / null literals (distinct color from keywords) ----
-    private val BOOLEANS = setOf(
-        "true", "false", "TRUE", "FALSE", "NULL", "nullptr",
-    )
-
-    // ---- declaration keywords whose following identifier is a type/namespace name ----
-    private val DECL_KEYWORDS = setOf(
-        "class", "struct", "namespace", "enum", "union", "typedef",
-    )
+    // ---- vocabulary (sourced from CSemanticAnalyzer.Vocab — single truth) ----
+    private val V = CSemanticAnalyzer.Vocab
 
     private data class Token(val start: Int, val end: Int, val category: Category)
 
+    private val s = TextScanner  // reuse shared scanning primitives
+
     /**
-     * Highlight [text]. Pass [isCpp] = true for C++ sources (.cpp/.hpp/...)
+     * Highlight [text]. Pass [mode] = [LanguageMode.CPP] for C++ sources
      * so the C++ keyword / type vocabulary is used; otherwise C is assumed.
-     * [match] is an optional literal search term that gets a yellow background.
+     * [match] is an optional literal search term for background highlight.
      */
     fun highlight(
         text: String,
         colors: SyntaxColors,
-        isCpp: Boolean = false,
+        mode: LanguageMode = LanguageMode.C,
         match: String = "",
     ): AnnotatedString {
-        val keywords = if (isCpp) CPP_KEYWORDS else C_KEYWORDS
-        val types = if (isCpp) CPP_TYPES else C_TYPES
-        val declared = MiniSyntaxChecker.findDeclared(text, isCpp)
+        val keywords = V.keywords(mode)
+        val types = V.types(mode)
+        val declared = CSemanticAnalyzer.analyze(text, mode).allDeclared
         val tokens = tokenize(text, keywords, types, declared)
         return paint(text, tokens, colors, match)
     }
 
     /** True for file names that should be highlighted as C++. */
-    fun isCppFile(name: String): Boolean {
+    fun isCppFile(name: String): LanguageMode {
         val lower = name.lowercase()
-        return lower.endsWith(".cpp") || lower.endsWith(".cc") ||
+        return if (lower.endsWith(".cpp") || lower.endsWith(".cc") ||
             lower.endsWith(".cxx") || lower.endsWith(".c++") ||
             lower.endsWith(".hpp") || lower.endsWith(".hxx") ||
             lower.endsWith(".hh") || lower.endsWith(".h++")
+        ) LanguageMode.CPP else LanguageMode.C
     }
 
     // ---- scan: source text -> categorized tokens (order-preserving) ----
@@ -141,16 +86,14 @@ object CSyntaxHighlighter {
                 // line comment  //...
                 c == '/' && i + 1 < n && text[i + 1] == '/' -> {
                     val start = i
-                    while (i < n && text[i] != '\n') i++
+                    i = s.skipLineComment(text, i, n)
                     tokens += Token(start, i, Category.COMMENT)
                 }
 
                 // block comment  /* ... */
                 c == '/' && i + 1 < n && text[i + 1] == '*' -> {
                     val start = i
-                    i += 2
-                    while (i < n && !(text[i] == '*' && i + 1 < n && text[i + 1] == '/')) i++
-                    if (i < n) i += 2 else i = n
+                    i = s.skipBlockComment(text, i, n)
                     tokens += Token(start, i, Category.COMMENT)
                 }
 
@@ -160,44 +103,14 @@ object CSyntaxHighlighter {
                 ((c == 'L' || c == 'u' || c == 'U') && i + 1 < n && text[i + 1] == '"') ||
                 (c == 'u' && i + 2 < n && text[i + 1] == '8' && text[i + 2] == '"') -> {
                     val start = i
-                    // consume the optional prefix so the body scan starts at the quote
-                    if (c != '"') {
-                        if (c == 'R') {
-                            i += 2                 // R"(...)
-                        } else if (c == 'u' && i + 2 < n && text[i + 1] == '8') {
-                            i += 3                 // u8"(...)
-                        } else {
-                            i += 2                 // L"(...) / u"(...) / U"(...)
-                        }
-                    } else {
-                        i += 1                     // plain "..."
-                    }
-                    if (c == 'R' && i < n && text[i] == '(') {
-                        // raw string: read until the closing )"
-                        i++
-                        while (i < n) {
-                            if (text[i] == ')' && i + 1 < n && text[i + 1] == '"') { i += 2; break }
-                            i++
-                        }
-                    } else {
-                        while (i < n) {
-                            if (text[i] == '\\' && i + 1 < n) { i += 2; continue }
-                            if (text[i] == '"') { i++; break }
-                            i++
-                        }
-                    }
+                    i = s.skipCStringLiteral(text, i, n)
                     tokens += Token(start, i, Category.STRING)
                 }
 
                 // char literal  '...'
                 c == '\'' -> {
                     val start = i
-                    i++
-                    while (i < n) {
-                        if (text[i] == '\\' && i + 1 < n) { i += 2; continue }
-                        if (text[i] == '\'') { i++; break }
-                        i++
-                    }
+                    i = s.skipStringLiteral(text, i, n, '\'')
                     tokens += Token(start, i, Category.STRING)
                 }
 
@@ -207,7 +120,7 @@ object CSyntaxHighlighter {
                     val before = if (lineStart < i) text.substring(lineStart, i) else ""
                     if (lineStart == i || before.all { it == ' ' || it == '\t' }) {
                         val start = i
-                        while (i < n && text[i] != '\n') i++
+                        i = s.skipPreprocessor(text, i, n)
                         tokens += Token(start, i, Category.PREPROCESSOR)
                     } else {
                         i++
@@ -239,9 +152,10 @@ object CSyntaxHighlighter {
                     i += 2
                 }
 
-                // member access  .   (obj.field) — mark the following identifier
+                // member access  .   (obj.field) — tokenize the dot as operator, mark the following identifier
                 c == '.' -> {
                     if (i + 1 < n && (text[i + 1].isLetter() || text[i + 1] == '_')) {
+                        tokens += Token(i, i + 1, Category.OPERATOR)
                         pendingMember = true
                     }
                     i++
@@ -264,7 +178,7 @@ object CSyntaxHighlighter {
                 // identifier: keyword / type / function-call / class-or-namespace
                 c.isLetter() || c == '_' || c == '$' -> {
                     val start = i
-                    while (i < n && (text[i].isLetterOrDigit() || text[i] == '_' || text[i] == '$')) i++
+                    i = s.endOfIdentifier(text, i, n)
                     val word = text.substring(start, i)
                     // function call? skip blanks then '('
                     var j = i
@@ -285,7 +199,7 @@ object CSyntaxHighlighter {
                     // member access > ALL_CAPS constant (macros) >
                     // declared variable (mini syntax checker) > plain text (uncolored).
                     val category = when {
-                        word in BOOLEANS -> Category.BOOLEAN
+                        word in V.BOOLEANS -> Category.BOOLEAN
                         word in keywords -> Category.KEYWORD
                         word in types -> Category.TYPE
                         isFunc -> Category.FUNCTION
@@ -300,7 +214,7 @@ object CSyntaxHighlighter {
                     // the next identifier after a type/namespace decl keyword is a name,
                     // but only if the keyword is valid in the current language mode
                     // (e.g. 'namespace' is C++ only — don't trigger in .c files)
-                    if (word in DECL_KEYWORDS && word in keywords) pendingDecl = true
+                    if (word in V.DECL_KEYWORDS && word in keywords) pendingDecl = true
                     tokens += Token(start, i, category)
                 }
 
@@ -348,7 +262,7 @@ object CSyntaxHighlighter {
             while (idx >= 0) {
                 val end = idx + match.length
                 builder.addStyle(
-                    SpanStyle(background = Color(0xFFFFFF00), color = Color(0xFF000000)),
+                    SpanStyle(background = colors.searchMatchBg, color = colors.searchMatchFg),
                     idx,
                     end,
                 )
@@ -360,16 +274,6 @@ object CSyntaxHighlighter {
     }
 
     /** True for macro-like identifiers: ALL_CAPS with at least one letter. */
-    private fun String.isAllCaps(): Boolean {
-        if (length < 2) return false
-        var hasUpper = false
-        for (ch in this) {
-            when {
-                ch.isUpperCase() -> hasUpper = true
-                ch.isLowerCase() -> return false   // mixed/lower → not a macro
-                // digits and '_' are allowed
-            }
-        }
-        return hasUpper
-    }
+    private fun String.isAllCaps(): Boolean =
+        length >= 2 && any { it.isUpperCase() } && none { it.isLowerCase() }
 }

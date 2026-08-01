@@ -41,6 +41,10 @@ import com.uniaball.uide.ui.theme.EditorFontFamily
 import com.uniaball.uide.ui.theme.syntaxColors
 import kotlinx.coroutines.launch
 
+private val EDITOR_FONT_SIZE = 14.sp
+private val EDITOR_LINE_HEIGHT = 20.sp
+private val EDITOR_PADDING = 12.dp
+
 @Composable
 fun EditorScreen(
     fileName: String,
@@ -54,16 +58,16 @@ fun EditorScreen(
     val scope = rememberCoroutineScope()
 
     var text by remember(fileName) { mutableStateOf(TextFieldValue(repository.read(fileName))) }
-    val isCpp = remember(fileName) { CSyntaxHighlighter.isCppFile(fileName) }
-    val highlighted = remember(text.text, isCpp) {
-        CSyntaxHighlighter.highlight(text.text, colors, isCpp)
+    val mode = remember(fileName) { CSyntaxHighlighter.isCppFile(fileName) }
+    val highlighted = remember(text.text, mode) {
+        CSyntaxHighlighter.highlight(text.text, colors, mode)
     }
 
     val editorStyle = remember {
         TextStyle(
             fontFamily = EditorFontFamily,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
+            fontSize = EDITOR_FONT_SIZE,
+            lineHeight = EDITOR_LINE_HEIGHT,
         )
     }
     val vScroll = rememberScrollState()
@@ -73,7 +77,7 @@ fun EditorScreen(
         .fillMaxSize()
         .verticalScroll(vScroll)
         .horizontalScroll(hScroll)
-        .padding(12.dp)
+        .padding(EDITOR_PADDING)
 
     Scaffold(
         topBar = {
@@ -91,6 +95,8 @@ fun EditorScreen(
                             // Tell the file list to re-read when we return.
                             val key = "uide_refresh"
                             fileListHandle?.set(key, (fileListHandle.get<Int>(key) ?: 0) + 1)
+                        } else {
+                            scope.launch { snackbarHost.showSnackbar("保存失败") }
                         }
                     }) {
                         Icon(Icons.Filled.Save, contentDescription = "保存")
