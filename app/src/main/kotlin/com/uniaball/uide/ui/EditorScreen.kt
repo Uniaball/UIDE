@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
@@ -153,10 +154,33 @@ fun EditorScreen(
                     }
                 },
             )
-            // Top layer: transparent editable input.
+            // Top layer: transparent editable input with auto-indent on Enter.
             BasicTextField(
                 value = text,
-                onValueChange = { text = it },
+                onValueChange = { newValue ->
+                    val oldLen = text.text.length
+                    val newLen = newValue.text.length
+                    if (newLen == oldLen + 1) {
+                        val cursor = newValue.selection.start
+                        if (cursor > 0 && newValue.text[cursor - 1] == '\n') {
+                            val before = newValue.text.substring(0, cursor - 1)
+                            val lineStart = before.lastIndexOf('\n') + 1
+                            val prevLine = newValue.text.substring(lineStart, cursor - 1)
+                            val indent = prevLine.takeWhile { it == ' ' || it == '\t' }
+                            val extra = if (prevLine.trimEnd().endsWith("{")) "    " else ""
+                            val fullIndent = indent + extra
+                            val patched = newValue.text.substring(0, cursor) +
+                                fullIndent +
+                                newValue.text.substring(cursor)
+                            text = newValue.copy(
+                                text = patched,
+                                selection = TextRange(cursor + fullIndent.length),
+                            )
+                            return@BasicTextField
+                        }
+                    }
+                    text = newValue
+                },
                 textStyle = editorStyle.copy(color = Color.Transparent),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
                 modifier = layerModifier,
@@ -172,7 +196,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWavyLine(
     if (endX <= startX) return
     val path = Path()
     val waveLen = 5f
-    val amp = 2f
+    val amp = 3f
     path.moveTo(startX, y)
     var x = startX
     while (x < endX) {
@@ -181,5 +205,5 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWavyLine(
         path.relativeCubicTo(w * 0.25f, amp, w * 0.75f, amp, w, 0f)
         x += w
     }
-    drawPath(path, color, style = Stroke(width = 1.5f, cap = StrokeCap.Round))
+    drawPath(path, color, style = Stroke(width = 2f, cap = StrokeCap.Round))
 }

@@ -258,6 +258,38 @@ object CSemanticAnalyzer {
         if (parenDepth > 0) errors += SemanticError(n, n, "$parenDepth 个未闭合的 '('")
         if (bracketDepth > 0) errors += SemanticError(n, n, "$bracketDepth 个未闭合的 '['")
         if (braceDepth > 0) errors += SemanticError(n, n, "$braceDepth 个未闭合的 '{'")
+
+        // ---- post-scan: missing-semicolon pass ----
+        var linePos = 0
+        val lineTerminators = setOf(';', '{', '}', ':', ')', ',')
+        while (linePos < n) {
+            val lineEnd = text.indexOf('\n', linePos).let { if (it == -1) n else it }
+            val rawLine = text.substring(linePos, lineEnd)
+            val trimmed = rawLine.trimStart()
+            if (trimmed.isNotEmpty() &&
+                !trimmed.startsWith("#") &&
+                !trimmed.startsWith("//") &&
+                !trimmed.startsWith("/*") &&
+                !trimmed.startsWith("*") &&
+                !trimmed.startsWith("}") &&
+                trimmed.any { it.isLetterOrDigit() }
+            ) {
+                val lastChar = rawLine.trimEnd().lastOrNull()
+                if (lastChar != null &&
+                    lastChar !in lineTerminators &&
+                    lastChar != '\\' &&
+                    lastChar != '>'
+                ) {
+                    // Don't flag lines that look like labels:  foo:
+                    val afterTrim = rawLine.trimEnd()
+                    if (!afterTrim.endsWith(":")) {
+                        errors += SemanticError(linePos, lineEnd, "可能缺少分号 ';'")
+                    }
+                }
+            }
+            linePos = lineEnd + 1
+        }
+
         return SemanticInfo(
             declaredVariables = variables,
             typedefAliases = typedefs,
