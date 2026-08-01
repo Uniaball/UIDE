@@ -79,6 +79,11 @@ object CSyntaxHighlighter {
         "true", "false", "TRUE", "FALSE", "NULL", "nullptr",
     )
 
+    // ---- declaration keywords whose following identifier is a type/namespace name ----
+    private val DECL_KEYWORDS = setOf(
+        "class", "struct", "namespace", "enum", "union", "typedef",
+    )
+
     /**
      * Highlight [text]. Pass [isCpp] = true for C++ sources (.cpp/.hpp/...)
      * so the C++ keyword / type vocabulary is used; otherwise C is assumed.
@@ -108,6 +113,7 @@ object CSyntaxHighlighter {
         builder.append(text)
         var i = 0
         var pendingMember = false
+        var pendingDecl = false   // set after class/struct/namespace/enum/...
         val n = text.length
 
         while (i < n) {
@@ -237,7 +243,7 @@ object CSyntaxHighlighter {
                     style(builder, start, i, colors.number)
                 }
 
-                // identifier: keyword / type / function-call
+                // identifier: keyword / type / function-call / class-or-namespace
                 c.isLetter() || c == '_' || c == '$' -> {
                     val start = i
                     while (i < n && (text[i].isLetterOrDigit() || text[i] == '_' || text[i] == '$')) i++
@@ -246,20 +252,34 @@ object CSyntaxHighlighter {
                     var j = i
                     while (j < n && (text[j] == ' ' || text[j] == '\t')) j++
                     val isFunc = j < n && text[j] == '('
+                    // class / namespace qualifier? id immediately followed by ::
+                    var k = i
+                    while (k < n && (text[k] == ' ' || text[k] == '\t')) k++
+                    val isQualifier = k < n && text[k] == ':' && k + 1 < n && text[k + 1] == ':'
+                    // PascalCase identifier → class / type name
+                    val isClassName = word.isNotEmpty() && word[0].isUpperCase() && !word.isAllCaps()
                     val isMember = pendingMember
                     pendingMember = false
-                    // Priority: boolean literal > keyword > type > function call >
-                    // member access > ALL_CAPS constant (macros) > plain identifier
-                    // (plain identifiers reuse the function color).
+                    val isDecl = pendingDecl
+                    pendingDecl = false
+                    // Priority: boolean > keyword > type > function call >
+                    // class/namespace name (decl keyword / qualifier / PascalCase) >
+                    // member access > ALL_CAPS constant (macros) >
+                    // plain identifier (function color).
                     val color = when {
                         word in BOOLEANS -> colors.boolean
                         word in keywords -> colors.keyword
                         word in types -> colors.type
                         isFunc -> colors.function
+                        isDecl -> colors.classname
+                        isQualifier -> colors.classname
+                        isClassName -> colors.classname
                         isMember -> colors.member
                         word.isAllCaps() -> colors.constant
                         else -> colors.function
                     }
+                    // the next identifier after a type/namespace decl keyword is a name
+                    if (word in DECL_KEYWORDS) pendingDecl = true
                     if (color != null) style(builder, start, i, color)
                 }
 

@@ -7,8 +7,8 @@ import androidx.compose.ui.graphics.Color
  * Tuned to be readable on both light and dark surfaces (VS Code-like).
  *
  * The base 8 roles (comment/string/preprocessor/number/keyword/type/function/
- * operator) keep a stable color consensus. The extra 3 roles (constant/member/
- * boolean) only add more distinct colors for *different kinds of words*;
+ * operator) keep a stable color consensus. The extra 4 roles (constant/member/
+ * boolean/classname) only add more distinct colors for *different kinds of words*;
  * they never change the established base palette. Plain identifiers reuse the
  * function color.
  */
@@ -25,6 +25,7 @@ data class SyntaxColors(
     val constant: Color,   // macros / ALL_CAPS identifiers, e.g. MAX, BUFFER_SIZE
     val member: Color,     // member / namespace access, e.g. obj.field, ns::name
     val boolean: Color,    // boolean / null literals: true, false, NULL, nullptr
+    val classname: Color,  // classes / namespaces: PascalCase ids & qualifiers before ::
 )
 
 fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
@@ -41,6 +42,7 @@ fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
         constant = Color(0xFFFFB86C),   // amber/orange
         member = Color(0xFF9CDCFE),     // light sky blue
         boolean = Color(0xFFE06C9F),    // pink/rose
+        classname = Color(0xFFBB9AF7),  // soft violet (Dracula-like)
     )
 } else {
     SyntaxColors(
@@ -56,5 +58,6 @@ fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
         constant = Color(0xFFB45309),   // dark orange
         member = Color(0xFF0A6EBE),     // blue
         boolean = Color(0xFFC2185B),    // rose
+        classname = Color(0xFF8250DF),  // purple, readable on white
     )
 }
