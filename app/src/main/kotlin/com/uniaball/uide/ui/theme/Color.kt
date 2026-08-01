@@ -4,13 +4,18 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * Color roles for C / C++ syntax highlighting.
- * Tuned to be readable on both light and dark surfaces (VS Code-like).
  *
- * The base 8 roles (comment/string/preprocessor/number/keyword/type/function/
- * operator) keep a stable color consensus. The extra 4 roles (constant/member/
- * boolean/classname) only add more distinct colors for *different kinds of words*;
- * they never change the established base palette. Plain identifiers reuse the
- * function color.
+ * Palette ported from VS Code's default themes (`Dark+` / `Light+`,
+ * microsoft/vscode `extensions/theme-defaults/themes/`). Dark values are taken
+ * from `dark_vs.json` + `dark_plus.json`; light values from `light_vs.json` +
+ * `light_plus.json`.
+ *
+ * A mini syntax checker (`VariableTracker`) collects declared variable names
+ * before highlighting. Only identifiers that were previously declared (e.g.
+ * `int count;` → `count`) are colored as variable. Random typing still stays
+ * default-colored — matching AndroidIDE's behavior.
+ *
+ * Roles: 9 base (incl. variable) plus 4 extra (constant/member/boolean/classname).
  */
 data class SyntaxColors(
     val comment: Color,
@@ -20,6 +25,7 @@ data class SyntaxColors(
     val keyword: Color,
     val type: Color,
     val function: Color,
+    val variable: Color,    // declared variables (identified by mini syntax checker)
     val operator: Color,
     // ---- extra roles: more color variety for different words ----
     val constant: Color,   // macros / ALL_CAPS identifiers, e.g. MAX, BUFFER_SIZE
@@ -29,35 +35,39 @@ data class SyntaxColors(
 )
 
 fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
+    // VS Code "Dark+" (dark_vs.json + dark_plus.json)
     SyntaxColors(
-        comment = Color(0xFF6A9955),
-        string = Color(0xFFCE9178),
-        preprocessor = Color(0xFFC586C0),
-        number = Color(0xFFB5CEA8),
-        keyword = Color(0xFF569CD6),
-        type = Color(0xFF4EC9B0),
-        function = Color(0xFFDCDCAA),
-        operator = Color(0xFFD4D4D4),
-        // extra roles (distinct hues, dark)
-        constant = Color(0xFFFFB86C),   // amber/orange
-        member = Color(0xFF9CDCFE),     // light sky blue
-        boolean = Color(0xFFE06C9F),    // pink/rose
-        classname = Color(0xFFBB9AF7),  // soft violet (Dracula-like)
+        comment = Color(0xFF6A9955),      // comment
+        string = Color(0xFFCE9178),       // string
+        preprocessor = Color(0xFF569CD6), // meta.preprocessor (blue, like keyword)
+        number = Color(0xFFB5CEA8),       // constant.numeric
+        keyword = Color(0xFF569CD6),      // keyword
+        type = Color(0xFF4EC9B0),         // entity.name.type
+        function = Color(0xFFDCDCAA),     // entity.name.function
+        variable = Color(0xFF9CDCFE),     // variable
+        operator = Color(0xFFD4D4D4),     // keyword.operator (light gray)
+        // extra roles
+        constant = Color(0xFF4FC1FF),     // variable.other.constant (macros)
+        member = Color(0xFF9CDCFE),       // variable (member access)
+        boolean = Color(0xFF569CD6),      // constant.language (true/false/NULL)
+        classname = Color(0xFF4EC9B0),    // entity.name.type/class/namespace
     )
 } else {
+    // VS Code "Light+" (light_vs.json + light_plus.json)
     SyntaxColors(
-        comment = Color(0xFF008000),
-        string = Color(0xFFA31515),
-        preprocessor = Color(0xFFAF00DB),
-        number = Color(0xFF098658),
-        keyword = Color(0xFF0000FF),
-        type = Color(0xFF267F99),
-        function = Color(0xFF795E26),
-        operator = Color(0xFF5A5A5A),
-        // extra roles (distinct, readable on white)
-        constant = Color(0xFFB45309),   // dark orange
-        member = Color(0xFF0A6EBE),     // blue
-        boolean = Color(0xFFC2185B),    // rose
-        classname = Color(0xFF8250DF),  // purple, readable on white
+        comment = Color(0xFF008000),      // comment
+        string = Color(0xFFA31515),       // string
+        preprocessor = Color(0xFF0000FF), // meta.preprocessor (blue, like keyword)
+        number = Color(0xFF098658),       // constant.numeric
+        keyword = Color(0xFF0000FF),      // keyword
+        type = Color(0xFF267F99),         // entity.name.type
+        function = Color(0xFF795E26),     // entity.name.function
+        variable = Color(0xFF001080),     // variable
+        operator = Color(0xFF000000),     // keyword.operator (black, like default text)
+        // extra roles
+        constant = Color(0xFF0070C1),     // variable.other.constant (macros)
+        member = Color(0xFF001080),       // variable (member access)
+        boolean = Color(0xFF0000FF),      // constant.language (true/false/NULL)
+        classname = Color(0xFF267F99),    // entity.name.type/class/namespace
     )
 }

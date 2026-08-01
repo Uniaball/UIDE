@@ -6,16 +6,30 @@ import androidx.compose.ui.text.SpanStyle
 import com.uniaball.uide.ui.theme.SyntaxColors
 
 /**
- * Lightweight C / C++ syntax highlighter.
+ * C / C++ syntax highlighter.
  *
- * Implementation: a single forward scan with a small state machine so that
- * tokens inside comments / strings are NOT mistaken for keywords, etc.
- * Not a full parser — good enough for an initial code editor.
+ * Architecture ported from AndroidIDE's `Highlighter` design (see
+ * AndroidCSOfficial/android-code-studio): a single forward scan **tokenizes**
+ * the source into categorized spans, then a paint pass maps each category to a
+ * color. A trailing `match` pass (also from AndroidIDE's `JavaHighlighter`)
+ * highlights an arbitrary search term.
  *
- * C++ is syntactically a superset of C, so the scanning logic is identical
- * for both; only the recognised keyword / type sets differ (see [isCpp]).
+ * C++ is a syntactic superset of C, so the scan is identical for both; only the
+ * recognised keyword / type vocabulary differs (see [isCpp]).
+ *
+ * NOTE: AndroidIDE's original uses an ANTLR lexer + sora `EditorColorScheme`
+ * and Android `SpannableStringBuilder`. Those are not portable to Compose, so
+ * this is a faithful Kotlin/Compose re-implementation of the same design.
  */
 object CSyntaxHighlighter {
+
+    /** Token categories — the bridge between scan and paint, like AndroidIDE's token types. */
+    private enum class Category {
+        COMMENT, STRING, PREPROCESSOR, NUMBER,
+        KEYWORD, TYPE, FUNCTION, VARIABLE, OPERATOR,
+        CONSTANT, MEMBER, BOOLEAN, CLASSNAME,
+        TEXT_NORMAL,
+    }
 
     // ---- C keywords ----
     private val C_KEYWORDS = setOf(
@@ -84,14 +98,24 @@ object CSyntaxHighlighter {
         "class", "struct", "namespace", "enum", "union", "typedef",
     )
 
+    private data class Token(val start: Int, val end: Int, val category: Category)
+
     /**
      * Highlight [text]. Pass [isCpp] = true for C++ sources (.cpp/.hpp/...)
      * so the C++ keyword / type vocabulary is used; otherwise C is assumed.
+     * [match] is an optional literal search term that gets a yellow background.
      */
-    fun highlight(text: String, colors: SyntaxColors, isCpp: Boolean = false): AnnotatedString {
+    fun highlight(
+        text: String,
+        colors: SyntaxColors,
+        isCpp: Boolean = false,
+        match: String = "",
+    ): AnnotatedString {
         val keywords = if (isCpp) CPP_KEYWORDS else C_KEYWORDS
         val types = if (isCpp) CPP_TYPES else C_TYPES
-        return scan(text, colors, keywords, types)
+        val declared = MiniSyntaxChecker.findDeclared(text, isCpp)
+        val tokens = tokenize(text, keywords, types, declared)
+        return paint(text, tokens, colors, match)
     }
 
     /** True for file names that should be highlighted as C++. */
@@ -103,14 +127,9 @@ object CSyntaxHighlighter {
             lower.endsWith(".hh") || lower.endsWith(".h++")
     }
 
-    private fun scan(
-        text: String,
-        colors: SyntaxColors,
-        keywords: Set<String>,
-        types: Set<String>,
-    ): AnnotatedString {
-        val builder = AnnotatedString.Builder(text.length)
-        builder.append(text)
+    // ---- scan: source text -> categorized tokens (order-preserving) ----
+    private fun tokenize(text: String, keywords: Set<String>, types: Set<String>, declared: Set<String> = emptySet()): List<Token> {
+        val tokens = mutableListOf<Token>()
         var i = 0
         var pendingMember = false
         var pendingDecl = false   // set after class/struct/namespace/enum/...
@@ -123,7 +142,7 @@ object CSyntaxHighlighter {
                 c == '/' && i + 1 < n && text[i + 1] == '/' -> {
                     val start = i
                     while (i < n && text[i] != '\n') i++
-                    style(builder, start, i, colors.comment)
+                    tokens += Token(start, i, Category.COMMENT)
                 }
 
                 // block comment  /* ... */
@@ -132,7 +151,7 @@ object CSyntaxHighlighter {
                     i += 2
                     while (i < n && !(text[i] == '*' && i + 1 < n && text[i + 1] == '/')) i++
                     if (i < n) i += 2 else i = n
-                    style(builder, start, i, colors.comment)
+                    tokens += Token(start, i, Category.COMMENT)
                 }
 
                 // string literal: plain "...", encoding-prefixed (L/u8/u/U), or raw R"(...)"
@@ -167,7 +186,7 @@ object CSyntaxHighlighter {
                             i++
                         }
                     }
-                    style(builder, start, i, colors.string)
+                    tokens += Token(start, i, Category.STRING)
                 }
 
                 // char literal  '...'
@@ -179,7 +198,7 @@ object CSyntaxHighlighter {
                         if (text[i] == '\'') { i++; break }
                         i++
                     }
-                    style(builder, start, i, colors.string)
+                    tokens += Token(start, i, Category.STRING)
                 }
 
                 // preprocessor directive  #...  (only at line start / after blanks)
@@ -189,16 +208,15 @@ object CSyntaxHighlighter {
                     if (lineStart == i || before.all { it == ' ' || it == '\t' }) {
                         val start = i
                         while (i < n && text[i] != '\n') i++
-                        style(builder, start, i, colors.preprocessor)
+                        tokens += Token(start, i, Category.PREPROCESSOR)
                     } else {
                         i++
                     }
                 }
 
-                // operators that are characteristic of C++ (and common in C)
                 // scope resolution  ::   (ns::name — name is a member)
                 c == ':' && i + 1 < n && text[i + 1] == ':' -> {
-                    style(builder, i, i + 2, colors.operator)
+                    tokens += Token(i, i + 2, Category.OPERATOR)
                     pendingMember = true
                     i += 2
                 }
@@ -207,17 +225,17 @@ object CSyntaxHighlighter {
                     val start = i
                     i += 2
                     if (i < n && text[i] == '*') i++   // ->*
-                    style(builder, start, i, colors.operator)
+                    tokens += Token(start, i, Category.OPERATOR)
                     pendingMember = true
                 }
                 // shift / stream  <<
                 c == '<' && i + 1 < n && text[i + 1] == '<' -> {
-                    style(builder, i, i + 2, colors.operator)
+                    tokens += Token(i, i + 2, Category.OPERATOR)
                     i += 2
                 }
                 // shift / closing template  >>
                 c == '>' && i + 1 < n && text[i + 1] == '>' -> {
-                    style(builder, i, i + 2, colors.operator)
+                    tokens += Token(i, i + 2, Category.OPERATOR)
                     i += 2
                 }
 
@@ -240,7 +258,7 @@ object CSyntaxHighlighter {
                     }
                     // drop a trailing lone '.' or sign from the colored range
                     while (i > start && !text[i - 1].isLetterOrDigit() && text[i - 1] != '_') i--
-                    style(builder, start, i, colors.number)
+                    tokens += Token(start, i, Category.NUMBER)
                 }
 
                 // identifier: keyword / type / function-call / class-or-namespace
@@ -265,38 +283,80 @@ object CSyntaxHighlighter {
                     // Priority: boolean > keyword > type > function call >
                     // class/namespace name (decl keyword / qualifier / PascalCase) >
                     // member access > ALL_CAPS constant (macros) >
-                    // plain identifier (function color).
-                    val color = when {
-                        word in BOOLEANS -> colors.boolean
-                        word in keywords -> colors.keyword
-                        word in types -> colors.type
-                        isFunc -> colors.function
-                        isDecl -> colors.classname
-                        isQualifier -> colors.classname
-                        isClassName -> colors.classname
-                        isMember -> colors.member
-                        word.isAllCaps() -> colors.constant
-                        else -> colors.function
+                    // declared variable (mini syntax checker) > plain text (uncolored).
+                    val category = when {
+                        word in BOOLEANS -> Category.BOOLEAN
+                        word in keywords -> Category.KEYWORD
+                        word in types -> Category.TYPE
+                        isFunc -> Category.FUNCTION
+                        isDecl -> Category.CLASSNAME
+                        isQualifier -> Category.CLASSNAME
+                        isClassName -> Category.CLASSNAME
+                        isMember -> Category.MEMBER
+                        word.isAllCaps() -> Category.CONSTANT
+                        word in declared -> Category.VARIABLE
+                        else -> Category.TEXT_NORMAL
                     }
-                    // the next identifier after a type/namespace decl keyword is a name
-                    if (word in DECL_KEYWORDS) pendingDecl = true
-                    if (color != null) style(builder, start, i, color)
+                    // the next identifier after a type/namespace decl keyword is a name,
+                    // but only if the keyword is valid in the current language mode
+                    // (e.g. 'namespace' is C++ only — don't trigger in .c files)
+                    if (word in DECL_KEYWORDS && word in keywords) pendingDecl = true
+                    tokens += Token(start, i, category)
                 }
 
                 else -> i++
             }
         }
 
-        return builder.toAnnotatedString()
+        return tokens
     }
 
-    private fun style(
-        builder: AnnotatedString.Builder,
-        start: Int,
-        end: Int,
-        color: Color,
-    ) {
-        if (end > start) builder.addStyle(SpanStyle(color = color), start, end)
+    // ---- paint: categorized tokens -> AnnotatedString ----
+    private fun paint(
+        text: String,
+        tokens: List<Token>,
+        colors: SyntaxColors,
+        match: String,
+    ): AnnotatedString {
+        val builder = AnnotatedString.Builder(text.length)
+        builder.append(text)
+        for (token in tokens) {
+            val color = when (token.category) {
+                Category.COMMENT -> colors.comment
+                Category.STRING -> colors.string
+                Category.PREPROCESSOR -> colors.preprocessor
+                Category.NUMBER -> colors.number
+                Category.KEYWORD -> colors.keyword
+                Category.TYPE -> colors.type
+                Category.FUNCTION -> colors.function
+                Category.VARIABLE -> colors.variable
+                Category.OPERATOR -> colors.operator
+                Category.CONSTANT -> colors.constant
+                Category.MEMBER -> colors.member
+                Category.BOOLEAN -> colors.boolean
+                Category.CLASSNAME -> colors.classname
+                Category.TEXT_NORMAL -> null
+            }
+            if (color != null && token.end > token.start) {
+                builder.addStyle(SpanStyle(color = color), token.start, token.end)
+            }
+        }
+
+        // search-term highlight — ported from AndroidIDE's JavaHighlighter `match` pass
+        if (match.isNotBlank()) {
+            var idx = text.indexOf(match, 0, ignoreCase = false)
+            while (idx >= 0) {
+                val end = idx + match.length
+                builder.addStyle(
+                    SpanStyle(background = Color(0xFFFFFF00), color = Color(0xFF000000)),
+                    idx,
+                    end,
+                )
+                idx = text.indexOf(match, end, ignoreCase = false)
+            }
+        }
+
+        return builder.toAnnotatedString()
     }
 
     /** True for macro-like identifiers: ALL_CAPS with at least one letter. */
