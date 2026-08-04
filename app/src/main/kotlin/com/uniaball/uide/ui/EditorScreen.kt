@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Save
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,7 +70,7 @@ fun EditorScreen(
     // Notify if file read produced an empty result (possible I/O error)
     LaunchedEffect(fileName) {
         if (text.text.isEmpty() && repository.listFiles().any { it.name == fileName }) {
-            snackbarHost.showSnackbar("文件可能为空或读取失败")
+            scope.launch { snackbarHost.showSnackbar("文件可能为空或读取失败") }
         }
     }
     val mode = remember(fileName) { CSyntaxHighlighter.isCppFile(fileName) }
