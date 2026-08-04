@@ -163,19 +163,30 @@ fun EditorScreen(
                     if (newLen == oldLen + 1) {
                         val cursor = newValue.selection.start
                         if (cursor > 0 && newValue.text[cursor - 1] == '\n') {
-                            val before = newValue.text.substring(0, cursor - 1)
-                            val lineStart = before.lastIndexOf('\n') + 1
-                            val prevLine = newValue.text.substring(lineStart, cursor - 1)
+                            val t = newValue.text
+                            val lineStart = t.lastIndexOf('\n', cursor - 2) + 1
+                            val prevLine = t.substring(lineStart, cursor - 1)
                             val indent = prevLine.takeWhile { it == ' ' || it == '\t' }
-                            val extra = if (prevLine.trimEnd().endsWith("{")) "    " else ""
-                            val fullIndent = indent + extra
-                            val patched = newValue.text.substring(0, cursor) +
-                                fullIndent +
-                                newValue.text.substring(cursor)
-                            text = newValue.copy(
-                                text = patched,
-                                selection = TextRange(cursor + fullIndent.length),
-                            )
+                            val trimmed = prevLine.trimEnd()
+
+                            if (trimmed.endsWith("{")) {
+                                // VS Code-style auto-close brace on Enter
+                                val inner = indent + "    "
+                                var after = t.substring(cursor)
+                                if (after.startsWith("}")) after = after.substring(1)
+                                val newText = t.substring(0, cursor) + "$inner\n$indent}" + after
+                                text = newValue.copy(
+                                    text = newText,
+                                    selection = TextRange(cursor + inner.length),
+                                )
+                            } else {
+                                // Normal Enter: copy previous line's indent
+                                val newText = t.substring(0, cursor) + indent + t.substring(cursor)
+                                text = newValue.copy(
+                                    text = newText,
+                                    selection = TextRange(cursor + indent.length),
+                                )
+                            }
                             return@BasicTextField
                         }
                     }
@@ -189,21 +200,23 @@ fun EditorScreen(
     }
 }
 
-/** Draw a red wavy (squiggly) underline from [startX] to [endX] at vertical position [y]. */
+/** Draw a bold red wavy (squiggly) underline — two-pass for extra visibility. */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWavyLine(
     startX: Float, endX: Float, y: Float, color: Color,
 ) {
     if (endX <= startX) return
     val path = Path()
     val waveLen = 5f
-    val amp = 3f
+    val amp = 4f
     path.moveTo(startX, y)
     var x = startX
     while (x < endX) {
         val w = minOf(waveLen, endX - x)
-        // One full wave cycle: down, up, back to baseline
-        path.relativeCubicTo(w * 0.25f, amp, w * 0.75f, amp, w, 0f)
+        path.relativeCubicTo(w * 0.25f, amp, w * 0.75f, -amp, w, 0f)
         x += w
     }
+    // Shadow pass: thicker, semi-transparent
+    drawPath(path, color.copy(alpha = 0.35f), style = Stroke(width = 4f, cap = StrokeCap.Round))
+    // Main pass: bold core line
     drawPath(path, color, style = Stroke(width = 2f, cap = StrokeCap.Round))
 }
