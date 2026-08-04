@@ -64,7 +64,7 @@ private fun AppNav(repository: FileRepository) {
             arguments = listOf(navArgument(ARG_FILE_NAME) { type = NavType.StringType }),
         ) { backStack ->
             val raw = backStack.arguments?.getString(ARG_FILE_NAME).orEmpty()
-            val name = URLDecoder.decode(raw, UTF8)
+            val name = runCatching { URLDecoder.decode(raw, UTF8) }.getOrDefault(raw)
             EditorScreen(
                 fileName = name,
                 repository = repository,

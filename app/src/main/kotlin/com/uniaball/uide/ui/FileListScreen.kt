@@ -17,6 +17,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -29,12 +31,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
 import com.uniaball.uide.data.FileRepository
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -46,6 +50,8 @@ fun FileListScreen(
     savedStateHandle: SavedStateHandle,
     onOpenFile: (String) -> Unit,
 ) {
+    val snackbarHost = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var files by remember { mutableStateOf(repository.listFiles()) }
     // The editor bumps this counter after a save so the list re-reads on return
     // (the screen is kept alive on the NavHost back stack, so its `remember`
@@ -65,6 +71,7 @@ fun FileListScreen(
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("UIDE") }) },
+        snackbarHost = { SnackbarHost(snackbarHost) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showNewDialog = true }) {
                 Icon(Icons.Filled.Add, contentDescription = "新建文件")
@@ -118,6 +125,8 @@ fun FileListScreen(
                     if (name.isNotEmpty() && repository.create(name)) {
                         refresh()
                         showNewDialog = false
+                    } else if (name.isNotEmpty()) {
+                        scope.launch { snackbarHost.showSnackbar("创建失败") }
                     }
                 }) { Text("创建") }
             },
@@ -134,9 +143,13 @@ fun FileListScreen(
             text = { Text("确定删除 $name 吗？此操作不可撤销。") },
             confirmButton = {
                 TextButton(onClick = {
-                    repository.delete(name)
-                    refresh()
-                    deleteTarget = null
+                    if (repository.delete(name)) {
+                        refresh()
+                        deleteTarget = null
+                    } else {
+                        scope.launch { snackbarHost.showSnackbar("删除失败") }
+                        deleteTarget = null
+                    }
                 }) { Text("删除") }
             },
             dismissButton = {

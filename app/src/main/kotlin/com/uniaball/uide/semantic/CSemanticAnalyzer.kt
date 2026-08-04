@@ -176,8 +176,8 @@ object CSemanticAnalyzer {
                 // ---- strings / chars ----
                 c == '"' || c == '\'' -> {
                     val start = i
-                    i = s.skipStringLiteral(text, i, n, c)
-                    if (i >= n && c == '"') errors += SemanticError(start, n, "未闭合的字符串")
+                    i = s.skipCStringLiteral(text, i, n)
+                    if (i >= n) errors += SemanticError(start, n, "未闭合的${if (c == '"') "字符串" else "字符字面量"}")
                 }
 
                 // ---- preprocessor ----
@@ -188,19 +188,19 @@ object CSemanticAnalyzer {
                 c == '(' -> { parenDepth++; afterType = false; inDecl = false; i++ }
                 c == ')' -> {
                     parenDepth--
-                    if (parenDepth < 0) { errors += SemanticError(i, i + 1, "多余的 ')'"); parenDepth = 0 }
+                    if (parenDepth < 0) errors += SemanticError(i, i + 1, "多余的 ')'")
                     afterType = false; inDecl = false; i++
                 }
                 c == '[' -> { bracketDepth++; afterType = false; inDecl = false; i++ }
                 c == ']' -> {
                     bracketDepth--
-                    if (bracketDepth < 0) { errors += SemanticError(i, i + 1, "多余的 ']'"); bracketDepth = 0 }
+                    if (bracketDepth < 0) errors += SemanticError(i, i + 1, "多余的 ']'")
                     afterType = false; inDecl = false; i++
                 }
                 c == '{' -> { braceDepth++; afterType = false; inDecl = false; i++ }
                 c == '}' -> {
                     braceDepth--
-                    if (braceDepth < 0) { errors += SemanticError(i, i + 1, "多余的 '}'"); braceDepth = 0 }
+                    if (braceDepth < 0) errors += SemanticError(i, i + 1, "多余的 '}'")
                     afterType = false; inDecl = false; i++
                 }
                 c == ';' || c == ':' -> {
@@ -240,6 +240,7 @@ object CSemanticAnalyzer {
                             else -> i++
                         }
                     }
+                    if (depth > 0 && i >= n) errors += SemanticError(n - 1, n, "未闭合的模板参数 '<>'")
                 }
 
                 // ---- identifier ----
@@ -255,9 +256,9 @@ object CSemanticAnalyzer {
                 else -> i++
             }
         }
-        if (parenDepth > 0) errors += SemanticError(n, n, "$parenDepth 个未闭合的 '('")
-        if (bracketDepth > 0) errors += SemanticError(n, n, "$bracketDepth 个未闭合的 '['")
-        if (braceDepth > 0) errors += SemanticError(n, n, "$braceDepth 个未闭合的 '{'")
+        if (parenDepth > 0) errors += SemanticError(n - 1, n, "$parenDepth 个未闭合的 '('")
+        if (bracketDepth > 0) errors += SemanticError(n - 1, n, "$bracketDepth 个未闭合的 '['")
+        if (braceDepth > 0) errors += SemanticError(n - 1, n, "$braceDepth 个未闭合的 '{'")
 
         // ---- post-scan: missing-semicolon pass ----
         var linePos = 0

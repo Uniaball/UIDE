@@ -66,6 +66,12 @@ fun EditorScreen(
     val scope = rememberCoroutineScope()
 
     var text by remember(fileName) { mutableStateOf(TextFieldValue(repository.read(fileName))) }
+    // Notify if file read produced an empty result (possible I/O error)
+    LaunchedEffect(fileName) {
+        if (text.text.isEmpty() && repository.listFiles().any { it.name == fileName }) {
+            snackbarHost.showSnackbar("文件可能为空或读取失败")
+        }
+    }
     val mode = remember(fileName) { CSyntaxHighlighter.isCppFile(fileName) }
     val highlighted = remember(text.text, mode) {
         CSyntaxHighlighter.highlight(text.text, colors, mode)

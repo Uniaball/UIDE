@@ -13,7 +13,9 @@ import java.io.IOException
 class FileRepository(private val root: File) {
 
     init {
-        root.mkdirs()
+        if (!root.mkdirs() && !root.exists()) {
+            Log.e(TAG, "无法创建存储目录: ${root.absolutePath}")
+        }
     }
 
     fun listFiles(): List<File> =
@@ -58,7 +60,7 @@ class FileRepository(private val root: File) {
         val safe = sanitize(name) ?: return false
         return try {
             File(root, safe).delete()
-        } catch (e: SecurityException) {
+        } catch (e: Exception) {
             Log.e(TAG, "删除文件失败: $safe", e)
             false
         }

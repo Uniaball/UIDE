@@ -276,7 +276,7 @@ object CSyntaxHighlighter {
         // drawWithContent wavy-underline pass in EditorScreen.
         for (err in errors) {
             val end = err.end.coerceAtMost(text.length)
-            if (end > err.start) {
+            if (end >= err.start) {
                 builder.addStringAnnotation("uide_error", err.message, err.start, end)
             }
         }

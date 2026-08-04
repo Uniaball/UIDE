@@ -75,21 +75,24 @@ object TextScanner {
     }
 
     /**
-     * Advance [i] past a C/C++ string literal, including encoding prefixes
-     * (`L"`, `u"`, `U"`, `u8"`) and raw strings (`R"(...)"`).  Caller has
-     * verified that [text[i]] is a valid string-literal start character.
+     * Advance [i] past a C/C++ string or char literal, including encoding
+     * prefixes (`L"`, `u"`, `U"`, `u8"`) and raw strings (`R"(...)"`).
+     * Caller has verified that [text[i]] is a valid literal start character
+     * (`"`, `'`, `L`, `u`, `U`, `R`).
      */
     fun skipCStringLiteral(text: String, i: Int, n: Int): Int {
         val c = text[i]
         var pos = i
+        val isChar = c == '\''
         // consume optional prefix
         when {
+            c == '\'' -> pos += 1                    // char literal '...'
             c == '"' -> pos += 1                     // plain "..."
             c == 'R' -> pos += 2                     // R"(...)
             c == 'u' && i + 2 < n && text[i + 1] == '8' -> pos += 3  // u8"(...)
             else -> pos += 2                         // L"(...) / u"(...) / U"(...)
         }
-        if (c == 'R' && pos < n && text[pos] == '(') {
+        if (!isChar && c == 'R' && pos < n && text[pos] == '(') {
             // raw string: read until closing )"
             pos++
             while (pos < n) {
@@ -97,9 +100,10 @@ object TextScanner {
                 pos++
             }
         } else {
+            val delim = if (isChar) '\'' else '"'
             while (pos < n) {
                 if (text[pos] == '\\' && pos + 1 < n) { pos += 2; continue }
-                if (text[pos] == '"') { pos++; break }
+                if (text[pos] == delim) { pos++; break }
                 pos++
             }
         }
