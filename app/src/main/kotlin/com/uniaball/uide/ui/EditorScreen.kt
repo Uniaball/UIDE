@@ -73,8 +73,8 @@ fun EditorScreen(
     // Only warn when the file actually has content on disk — a freshly
     // created empty file is legitimate and must not trigger this.
     LaunchedEffect(fileName) {
-        val file = repository.listFiles().firstOrNull { it.name == fileName }
-        if (text.text.isEmpty() && file != null && file.length() > 0L) {
+        val file = repository.resolve(fileName)
+        if (text.text.isEmpty() && file != null && file.isFile && file.length() > 0L) {
             scope.launch { snackbarHost.showSnackbar("文件可能为空或读取失败") }
         }
     }

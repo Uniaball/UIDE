@@ -25,16 +25,19 @@ enum class LanguageMode {
         /**
          * Detect the language mode for [name] by file name.
          *
-         * `CMakeLists.txt` matches exactly (case-sensitive); otherwise the
-         * extension decides between C and C++.
+         * `CMakeLists.txt` matches exactly on the last path segment
+         * (case-sensitive); otherwise the extension decides between C and C++.
          */
-        fun detect(name: String): LanguageMode = when {
-            name == CMAKE_LISTS -> CMAKE
-            name.lowercase().endsWith(".cpp") || name.lowercase().endsWith(".cc") ||
-                name.lowercase().endsWith(".cxx") || name.lowercase().endsWith(".c++") ||
-                name.lowercase().endsWith(".hpp") || name.lowercase().endsWith(".hxx") ||
-                name.lowercase().endsWith(".hh") || name.lowercase().endsWith(".h++") -> CPP
-            else -> C
+        fun detect(name: String): LanguageMode {
+            val base = name.substringAfterLast('/')
+            return when {
+                base == CMAKE_LISTS -> CMAKE
+                base.lowercase().endsWith(".cpp") || base.lowercase().endsWith(".cc") ||
+                    base.lowercase().endsWith(".cxx") || base.lowercase().endsWith(".c++") ||
+                    base.lowercase().endsWith(".hpp") || base.lowercase().endsWith(".hxx") ||
+                    base.lowercase().endsWith(".hh") || base.lowercase().endsWith(".h++") -> CPP
+                else -> C
+            }
         }
     }
 }
