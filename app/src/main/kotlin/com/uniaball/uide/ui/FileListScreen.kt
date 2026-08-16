@@ -114,7 +114,7 @@ fun FileListScreen(
                 title = { Text(if (path.isEmpty()) "UIDE" else dirName) },
                 navigationIcon = {
                     if (path.isNotEmpty()) {
-                        IconButton(onClick = goUp) {
+                        IconButton(onClick = { goUp() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回上级")
                         }
                     }
