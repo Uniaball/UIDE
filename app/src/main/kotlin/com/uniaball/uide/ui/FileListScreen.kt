@@ -1,5 +1,12 @@
 package com.uniaball.uide.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,7 +67,10 @@ fun FileListScreen(
     val scope = rememberCoroutineScope()
     // Current browsed directory (relative path, "" = root).
     var path by remember { mutableStateOf("") }
-    var files by remember(path) { mutableStateOf(repository.listEntries(path)) }
+    // Navigation direction for the enter/exit animation: true = deeper, false = back.
+    var navForward by remember { mutableStateOf(true) }
+    // Bumped to force a re-read of the current directory (after create/delete/save).
+    var filesVersion by remember { mutableStateOf(0) }
     // The editor bumps this counter after a save so the list re-reads on return
     // (the screen is kept alive on the NavHost back stack, so its `remember`
     // value would otherwise stay stale).
@@ -71,14 +81,29 @@ fun FileListScreen(
     var deleteTarget by remember { mutableStateOf<File?>(null) }
 
     fun refresh() {
-        files = repository.listEntries(path)
+        filesVersion++
     }
 
-    fun joinPath(entryName: String): String =
-        if (path.isEmpty()) entryName else "$path/$entryName"
+    fun goInto(entryName: String) {
+        navForward = true
+        path = if (path.isEmpty()) entryName else "$path/$entryName"
+        refresh()
+    }
+
+    fun goUp() {
+        navForward = false
+        path = path.substringBeforeLast('/', "")
+        refresh()
+    }
 
     LaunchedEffect(refreshSignal) {
         refresh()
+    }
+
+    // System back (gesture / button) exits folders first; only at the root
+    // does it fall through to the activity's default back behavior.
+    BackHandler(enabled = path.isNotEmpty()) {
+        goUp()
     }
 
     val dirName = path.substringAfterLast('/')
@@ -89,10 +114,7 @@ fun FileListScreen(
                 title = { Text(if (path.isEmpty()) "UIDE" else dirName) },
                 navigationIcon = {
                     if (path.isNotEmpty()) {
-                        IconButton(onClick = {
-                            path = path.substringBeforeLast('/', "")
-                            refresh()
-                        }) {
+                        IconButton(onClick = goUp) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回上级")
                         }
                     }
@@ -106,39 +128,55 @@ fun FileListScreen(
             }
         },
     ) { padding ->
-        if (files.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "暂无文件\n点击 + 创建新文件",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        // Slide + fade between directories: forward navigations slide in from
+        // the right, going back slides in from the left.
+        AnimatedContent(
+            targetState = path,
+            transitionSpec = {
+                val dir = if (navForward) 1 else -1
+                (slideInHorizontally { it * dir } + fadeIn()) togetherWith
+                    (slideOutHorizontally { -it * dir } + fadeOut())
+            },
+            label = "directory",
+        ) { targetPath ->
+            val entries = remember(targetPath, filesVersion) {
+                repository.listEntries(targetPath)
             }
-        } else {
-            LazyColumn(
-                contentPadding = padding,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                items(items = files, key = { it.relativePath(path) }) { entry ->
-                    val isDir = entry.isDirectory
-                    FileRow(
-                        file = entry,
-                        icon = if (isDir) Icons.Filled.Folder else null,
-                        onClick = {
-                            if (isDir) {
-                                path = joinPath(entry.name)
-                                refresh()
-                            } else {
-                                onOpenFile(joinPath(entry.name))
-                            }
-                        },
-                        onDelete = { deleteTarget = entry },
+            if (entries.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "暂无文件\n点击 + 创建新文件",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = padding,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(items = entries, key = { it.relativePath(targetPath) }) { entry ->
+                        val isDir = entry.isDirectory
+                        FileRow(
+                            file = entry,
+                            icon = if (isDir) Icons.Filled.Folder else null,
+                            onClick = {
+                                if (isDir) {
+                                    goInto(entry.name)
+                                } else {
+                                    onOpenFile(
+                                        if (targetPath.isEmpty()) entry.name else "$targetPath/${entry.name}"
+                                    )
+                                }
+                            },
+                            onDelete = { deleteTarget = entry },
+                        )
+                    }
                 }
             }
         }
@@ -158,6 +196,7 @@ fun FileListScreen(
                                 newIsDir = false
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            modifier = Modifier.weight(1f),
                         ) { Text("文件") }
                         SegmentedButton(
                             selected = newIsDir,
@@ -166,6 +205,7 @@ fun FileListScreen(
                                 newIsDir = true
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            modifier = Modifier.weight(1f),
                         ) { Text("文件夹") }
                     }
                     OutlinedTextField(
@@ -214,7 +254,8 @@ fun FileListScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (repository.delete(joinPath(target.name))) {
+                    val rel = if (path.isEmpty()) target.name else "$path/${target.name}"
+                    if (repository.delete(rel)) {
                         refresh()
                         deleteTarget = null
                     } else {
