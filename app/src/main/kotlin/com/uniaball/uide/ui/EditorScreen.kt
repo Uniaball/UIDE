@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.SavedStateHandle
 import com.uniaball.uide.data.FileRepository
+import com.uniaball.uide.semantic.LanguageMode
+import com.uniaball.uide.syntax.CMakeSyntaxHighlighter
 import com.uniaball.uide.syntax.CSyntaxHighlighter
 import com.uniaball.uide.ui.theme.EditorFontFamily
 import com.uniaball.uide.ui.theme.syntaxColors
@@ -73,9 +75,12 @@ fun EditorScreen(
             scope.launch { snackbarHost.showSnackbar("文件可能为空或读取失败") }
         }
     }
-    val mode = remember(fileName) { CSyntaxHighlighter.isCppFile(fileName) }
+    val mode = remember(fileName) { LanguageMode.detect(fileName) }
     val highlighted = remember(text.text, mode) {
-        CSyntaxHighlighter.highlight(text.text, colors, mode)
+        when (mode) {
+            LanguageMode.CMAKE -> CMakeSyntaxHighlighter.highlight(text.text, colors)
+            else -> CSyntaxHighlighter.highlight(text.text, colors, mode)
+        }
     }
 
     val editorStyle = remember {

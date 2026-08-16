@@ -15,7 +15,8 @@ import androidx.compose.ui.graphics.Color
  * `int count;` → `count`) are colored as variable. Random typing still stays
  * default-colored — matching AndroidIDE's behavior.
  *
- * Roles: 9 base (incl. variable) plus 4 extra (constant/member/boolean/classname).
+ * Roles: 9 base (incl. variable) plus 4 extra (constant/member/boolean/classname)
+ * plus include (header file in `#include` directives).
  *
  * NOTE — some roles intentionally share the same colour (matching VS Code's
  * default behaviour): keyword = boolean, type = classname, variable = member.
@@ -35,6 +36,7 @@ data class SyntaxColors(
     val member: Color,     // member / namespace access, e.g. obj.field, ns::name
     val boolean: Color,    // boolean / null literals: true, false, NULL, nullptr
     val classname: Color,  // classes / namespaces: PascalCase ids & qualifiers before ::
+    val include: Color,    // header file in `#include <...>` / `#include "..."` directives
     // ---- search match ----
     val searchMatchBg: Color,  // background for search-term highlight
     val searchMatchFg: Color,  // foreground (text) color on search-match background
@@ -45,7 +47,7 @@ data class SyntaxColors(
 fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
     // VS Code "Dark+" (dark_vs.json + dark_plus.json)
     SyntaxColors(
-        comment = Color(0xFF6A9955),      // comment
+        comment = Color(0xFF9E9E9E),      // gray, italic
         string = Color(0xFFCE9178),       // string
         preprocessor = Color(0xFF569CD6), // meta.preprocessor (blue, like keyword)
         number = Color(0xFFB5CEA8),       // constant.numeric
@@ -59,6 +61,7 @@ fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
         member = Color(0xFF9CDCFE),       // variable (member access)
         boolean = Color(0xFF569CD6),      // constant.language (true/false/NULL)
         classname = Color(0xFF4EC9B0),    // entity.name.type/class/namespace
+        include = Color(0xFF6A9955),      // header file in #include directives
         // search match
         searchMatchBg = Color(0x44FFF59D),    // translucent yellow, readable on dark surfaces
         searchMatchFg = Color(0xFF1E1E1E),    // near-black, readable on yellow bg
@@ -68,7 +71,7 @@ fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
 } else {
     // VS Code "Light+" (light_vs.json + light_plus.json)
     SyntaxColors(
-        comment = Color(0xFF008000),      // comment
+        comment = Color(0xFF808080),      // gray, italic
         string = Color(0xFFA31515),       // string
         preprocessor = Color(0xFF0000FF), // meta.preprocessor (blue, like keyword)
         number = Color(0xFF098658),       // constant.numeric
@@ -82,6 +85,7 @@ fun syntaxColors(dark: Boolean): SyntaxColors = if (dark) {
         member = Color(0xFF001080),       // variable (member access)
         boolean = Color(0xFF0000FF),      // constant.language (true/false/NULL)
         classname = Color(0xFF267F99),    // entity.name.type/class/namespace
+        include = Color(0xFF008000),      // header file in #include directives
         // search match
         searchMatchBg = Color(0x44FFEB3B),    // translucent yellow, readable on light surfaces
         searchMatchFg = Color(0xFF000000),    // black, readable on yellow bg

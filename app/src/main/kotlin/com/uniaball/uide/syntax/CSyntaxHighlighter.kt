@@ -2,6 +2,7 @@ package com.uniaball.uide.syntax
 
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontStyle
 import com.uniaball.uide.semantic.CSemanticAnalyzer
 import com.uniaball.uide.semantic.LanguageMode
 import com.uniaball.uide.semantic.SemanticError
@@ -22,7 +23,10 @@ import com.uniaball.uide.ui.theme.SyntaxColors
  * highlights an arbitrary search term.
  *
  * C++ is a syntactic superset of C, so the scan is identical for both; only the
- * recognised keyword / type vocabulary differs (see [isCpp]).
+ * recognised keyword / type vocabulary differs (see
+ * [com.uniaball.uide.semantic.LanguageMode.detect]).
+ *
+ * CMake files (`CMakeLists.txt`) are handled by [CMakeSyntaxHighlighter].
  *
  * NOTE: AndroidIDE's original uses an ANTLR lexer + sora `EditorColorScheme`
  * and Android `SpannableStringBuilder`. Those are not portable to Compose, so
@@ -35,8 +39,11 @@ object CSyntaxHighlighter {
         COMMENT, STRING, PREPROCESSOR, NUMBER,
         KEYWORD, TYPE, FUNCTION, VARIABLE, OPERATOR,
         CONSTANT, MEMBER, BOOLEAN, CLASSNAME,
-        TEXT_NORMAL,
+        INCLUDE, TEXT_NORMAL,
     }
+
+    /** Matches the header file in an `#include` directive: `<...>` or `"..."`. */
+    private val INCLUDE_RE = Regex("""^#\s*include\b\s*(<[^>]*>|"[^"]*")""")
 
     // ---- vocabulary (sourced from CSemanticAnalyzer.Vocab — single truth) ----
     private val V = CSemanticAnalyzer.Vocab
@@ -61,16 +68,6 @@ object CSyntaxHighlighter {
         val semantic = CSemanticAnalyzer.analyze(text, mode)
         val tokens = tokenize(text, keywords, types, semantic.allDeclared)
         return paint(text, tokens, colors, match, semantic.errors)
-    }
-
-    /** True for file names that should be highlighted as C++. */
-    fun isCppFile(name: String): LanguageMode {
-        val lower = name.lowercase()
-        return if (lower.endsWith(".cpp") || lower.endsWith(".cc") ||
-            lower.endsWith(".cxx") || lower.endsWith(".c++") ||
-            lower.endsWith(".hpp") || lower.endsWith(".hxx") ||
-            lower.endsWith(".hh") || lower.endsWith(".h++")
-        ) LanguageMode.CPP else LanguageMode.C
     }
 
     // ---- scan: source text -> categorized tokens (order-preserving) ----
@@ -123,6 +120,14 @@ object CSyntaxHighlighter {
                         val start = i
                         i = s.skipPreprocessor(text, i, n)
                         tokens += Token(start, i, Category.PREPROCESSOR)
+                        // `#include <header>` / `#include "header"` — the header
+                        // file itself gets a dedicated color (Category.INCLUDE).
+                        val m = INCLUDE_RE.find(text.substring(start, i))
+                        if (m != null && m.groups[1] != null) {
+                            val hs = start + m.groups[1]!!.range.first
+                            val he = start + m.groups[1]!!.range.last + 1
+                            tokens += Token(hs, he, Category.INCLUDE)
+                        }
                     } else {
                         i++
                     }
@@ -251,10 +256,16 @@ object CSyntaxHighlighter {
                 Category.MEMBER -> colors.member
                 Category.BOOLEAN -> colors.boolean
                 Category.CLASSNAME -> colors.classname
+                Category.INCLUDE -> colors.include
                 Category.TEXT_NORMAL -> null
             }
             if (color != null && token.end > token.start) {
-                builder.addStyle(SpanStyle(color = color), token.start, token.end)
+                val span = if (token.category == Category.COMMENT) {
+                    SpanStyle(color = color, fontStyle = FontStyle.Italic)
+                } else {
+                    SpanStyle(color = color)
+                }
+                builder.addStyle(span, token.start, token.end)
             }
         }
 

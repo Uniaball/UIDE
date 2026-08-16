@@ -118,11 +118,15 @@ object CSemanticAnalyzer {
         fun keywords(mode: LanguageMode): Set<String> = when (mode) {
             LanguageMode.C -> C_KEYWORDS
             LanguageMode.CPP -> C_KEYWORDS + CPP_EXTRA_KEYWORDS
+            // CMake has its own vocabulary (see CMakeSyntaxHighlighter)
+            LanguageMode.CMAKE -> emptySet()
         }
 
         fun types(mode: LanguageMode): Set<String> = when (mode) {
             LanguageMode.C -> C_TYPES
             LanguageMode.CPP -> C_TYPES + CPP_EXTRA_TYPES
+            // CMake has its own vocabulary (see CMakeSyntaxHighlighter)
+            LanguageMode.CMAKE -> emptySet()
         }
 
         // ---- shared word sets ----
@@ -156,6 +160,7 @@ object CSemanticAnalyzer {
         val structKeys = when (mode) {
             LanguageMode.C -> STRUCT_C
             LanguageMode.CPP -> STRUCT_CPP
+            LanguageMode.CMAKE -> emptySet()
         }
 
         while (i < n) {
