@@ -69,9 +69,12 @@ fun EditorScreen(
     val scope = rememberCoroutineScope()
 
     var text by remember(fileName) { mutableStateOf(TextFieldValue(repository.read(fileName))) }
-    // Notify if file read produced an empty result (possible I/O error)
+    // Notify if file read produced an empty result (possible I/O error).
+    // Only warn when the file actually has content on disk — a freshly
+    // created empty file is legitimate and must not trigger this.
     LaunchedEffect(fileName) {
-        if (text.text.isEmpty() && repository.listFiles().any { it.name == fileName }) {
+        val file = repository.listFiles().firstOrNull { it.name == fileName }
+        if (text.text.isEmpty() && file != null && file.length() > 0L) {
             scope.launch { snackbarHost.showSnackbar("文件可能为空或读取失败") }
         }
     }
