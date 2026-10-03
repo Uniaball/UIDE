@@ -1,8 +1,19 @@
 # Ignore Gradle project-specific cache directory
-.gradle
+.gradle/
 
-# Ignore Gradle build output directory
-build
+# Ignore Gradle build output directories.  Anchored to their roots, because a
+# bare "build" would also swallow the toolchain sources in
+# app/src/main/kotlin/com/uniaball/uide/build/.
+/build/
+/app/build/
 
 # Ignore Kotlin plugin data
 .kotlin
+
+# Ignore the native toolchain bootstrap and the deb cache it is built from.
+# Run scripts/build_bootstrap.py (or the bootstrap workflow) to produce it.
+.uide-cache
+app/src/main/assets/bootstrap-*
+
+# Ignore the CMake/NDK native build output
+.cxx

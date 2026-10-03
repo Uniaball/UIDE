@@ -26,8 +26,23 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Ensure gradlew is executable
         run: chmod +x gradlew
+
+      # The native toolchain is a build artifact: build it before assembling so
+      # the APK ships the same bootstrap that was verified on devices.
+      - name: Build toolchain bootstrap
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "ndk;27.3.13750724"
+          python scripts/build_bootstrap.py \
+            --ndk "$ANDROID_SDK_ROOT/ndk/27.3.13750724" \
+            --out app/src/main/assets/bootstrap-aarch64.bin
 
       - name: Build
         run: ./gradlew build

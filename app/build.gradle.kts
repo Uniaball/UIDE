@@ -7,6 +7,7 @@ plugins {
 android {
     namespace = "com.uniaball.uide"
     compileSdk = 36
+    ndkVersion = "27.3.13750724"
 
     defaultConfig {
         applicationId = "com.uniaball.uide"
@@ -14,6 +15,17 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {
@@ -54,32 +66,104 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-        // Opt in to Material3 experimental APIs (e.g. TopAppBar) at module level.
-        freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            freeCompilerArgs.add("-opt-in=androidx.compose.material3.ExperimentalMaterial3Api")
+        }
     }
 
     buildFeatures {
         compose = true
+    }
+
+    packaging {
+        jniLibs {
+            // LD_PRELOAD has to point at a real file on disk, so the exec hook
+            // (libuidexec.so) must be extracted into nativeLibraryDir instead of
+            // being loaded straight out of the APK.
+            useLegacyPackaging = true
+        }
+        resources {
+            excludes += setOf("META-INF/**")
+        }
+    }
+
+    androidResources {
+        // The bootstrap asset is already a gzip stream; storing it verbatim
+        // avoids a pointless deflate pass at package time.
+        noCompress += "bin"
+    }
+}
+
+/*
+ * The exec self-test binary has to end up inside the app data directory (not in
+ * nativeLibraryDir) so that the W^X exec path can be verified on a real device.
+ * It is therefore published as a generated asset instead of a jniLib.
+ */
+abstract class CollectSelfTestAsset : DefaultTask() {
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val binaries: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun collect() {
+        val found = binaries.files.sortedBy { it.name }
+        val selftest = found.firstOrNull { it.name == "uidexec-selftest" }
+            ?: throw GradleException(
+                "uidexec-selftest was not found under .cxx/ - has the native build run?",
+            )
+        val probe = found.firstOrNull { it.name == "uidexec-probe" }
+        val target = outputDirectory.get().asFile
+        target.deleteRecursively()
+        target.mkdirs()
+        selftest.copyTo(File(target, CollectSelfTestAsset.ASSET_NAME), overwrite = true)
+        probe?.copyTo(File(target, PROBE_ASSET_NAME), overwrite = true)
+    }
+
+    companion object {
+        const val ASSET_NAME = "uidexec-selftest-arm64"
+        const val PROBE_ASSET_NAME = "uidexec-probe-arm64"
+    }
+}
+
+val collectSelfTestAsset = tasks.register<CollectSelfTestAsset>("uideCollectSelfTestAsset") {
+    dependsOn("externalNativeBuildDebug")
+    binaries.from(
+        layout.projectDirectory.dir(".cxx").asFileTree.matching {
+            include("**/uidexec-selftest", "**/uidexec-probe")
+        },
+    )
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(collectSelfTestAsset) {
+            it.outputDirectory
+        }
     }
 }
 
 dependencies {
     // Compose BOM pins all androidx.compose.* versions (Compose 1.7 line,
     // which pairs with navigation-compose 2.8.x below).
-    implementation(platform("androidx.compose:compose-bom:2024.10.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.06.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // AndroidX (not in Compose BOM) — versioned explicitly.
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    // AndroidX (not in Compose BOM) - versioned explicitly.
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.core:core-ktx:1.18.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("androidx.navigation:navigation-compose:2.8.4")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
