@@ -1,10 +1,14 @@
 package com.uniaball.uide.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -36,6 +40,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -50,12 +55,15 @@ import com.uniaball.uide.syntax.CMakeSyntaxHighlighter
 import com.uniaball.uide.syntax.CSyntaxHighlighter
 import com.uniaball.uide.ui.theme.EditorFontFamily
 import com.uniaball.uide.ui.theme.syntaxColors
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val EDITOR_FONT_SIZE = 14.sp
 private val EDITOR_LINE_HEIGHT = 20.sp
 private val EDITOR_PADDING = 12.dp
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun EditorScreen(
     fileName: String,
@@ -68,11 +76,20 @@ fun EditorScreen(
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    var text by remember(fileName) { mutableStateOf(TextFieldValue(repository.read(fileName))) }
+    // Read on IO: an SD card read blocks for tens of milliseconds, which the
+    // user saw as a hitch right before the screen transition even started.
+    var text by remember(fileName) { mutableStateOf(TextFieldValue("")) }
+    var loaded by remember(fileName) { mutableStateOf(false) }
+    LaunchedEffect(fileName) {
+        val content = withContext(Dispatchers.IO) { repository.read(fileName) }
+        text = TextFieldValue(content)
+        loaded = true
+    }
     // Notify if file read produced an empty result (possible I/O error).
     // Only warn when the file actually has content on disk — a freshly
     // created empty file is legitimate and must not trigger this.
-    LaunchedEffect(fileName) {
+    LaunchedEffect(fileName, loaded) {
+        if (!loaded) return@LaunchedEffect
         val file = repository.resolve(fileName)
         if (text.text.isEmpty() && file != null && file.isFile && file.length() > 0L) {
             scope.launch { snackbarHost.showSnackbar("文件可能为空或读取失败") }
@@ -96,6 +113,13 @@ fun EditorScreen(
     val vScroll = rememberScrollState()
     val hScroll = rememberScrollState()
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+
+    // While editing, back must only leave edit mode (hide the keyboard).  Letting
+    // it through as well would pop this screen on the same press, which is what
+    // made back skip a whole directory level.
+    val focusManager = LocalFocusManager.current
+    val imeVisible = WindowInsets.isImeVisible
+    BackHandler(enabled = imeVisible) { focusManager.clearFocus(force = true) }
 
     val layerModifier = Modifier
         .fillMaxSize()
@@ -133,6 +157,8 @@ fun EditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // adjustNothing: lift the text above the keyboard ourselves.
+                .imePadding()
                 .background(MaterialTheme.colorScheme.surface),
         ) {
             // Bottom layer: syntax-highlighted text with wavy error underlines.
@@ -172,6 +198,7 @@ fun EditorScreen(
             // Top layer: transparent editable input with auto-indent on Enter.
             BasicTextField(
                 value = text,
+                readOnly = !loaded,
                 onValueChange = { newValue ->
                     val oldLen = text.text.length
                     val newLen = newValue.text.length

@@ -116,6 +116,15 @@ class FileRepository(private val root: File) {
         return File(root, safe)
     }
 
+    /**
+     * Directory at [path] (`""` = root), or null if the path is invalid or is
+     * not an existing directory.  Unlike [resolve] this accepts the root, which
+     * is why callers that mean "the directory currently being browsed" must use
+     * this instead of [resolve].
+     */
+    fun dirAt(path: String): File? = resolveDir(path)
+
+    /** Resolve a directory path (`""` = root), or null if it is not a directory. */
     private fun resolveDir(path: String): File? {
         if (path.isBlank()) return root
         val safe = sanitize(path) ?: return null
